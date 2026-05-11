@@ -1,0 +1,145 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-blood: var(--blood);
+  --color-steel: var(--steel);
+  --font-display: "Cinzel", "Times New Roman", serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+/* Ardenne Heavy — dark metal theme, designed for stage lighting */
+:root {
+  --radius: 0.5rem;
+
+  --background: oklch(0.13 0.01 30);          /* near-black, warm */
+  --foreground: oklch(0.97 0.01 80);          /* off-white */
+
+  --card: oklch(0.17 0.012 30);
+  --card-foreground: oklch(0.97 0.01 80);
+
+  --popover: oklch(0.17 0.012 30);
+  --popover-foreground: oklch(0.97 0.01 80);
+
+  --primary: oklch(0.62 0.22 27);             /* blood red */
+  --primary-foreground: oklch(0.98 0.01 80);
+
+  --secondary: oklch(0.24 0.015 30);
+  --secondary-foreground: oklch(0.97 0.01 80);
+
+  --muted: oklch(0.22 0.012 30);
+  --muted-foreground: oklch(0.70 0.02 60);
+
+  --accent: oklch(0.55 0.18 45);              /* ember orange */
+  --accent-foreground: oklch(0.98 0.01 80);
+
+  --destructive: oklch(0.55 0.24 25);
+  --destructive-foreground: oklch(0.98 0.01 80);
+
+  --border: oklch(0.28 0.015 30);
+  --input: oklch(0.22 0.012 30);
+  --ring: oklch(0.62 0.22 27);
+
+  --blood: oklch(0.62 0.22 27);
+  --steel: oklch(0.45 0.02 250);
+}
+
+.dark {
+  --background: oklch(0.13 0.01 30);
+  --foreground: oklch(0.97 0.01 80);
+  --card: oklch(0.17 0.012 30);
+  --card-foreground: oklch(0.97 0.01 80);
+  --popover: oklch(0.17 0.012 30);
+  --popover-foreground: oklch(0.97 0.01 80);
+  --primary: oklch(0.62 0.22 27);
+  --primary-foreground: oklch(0.98 0.01 80);
+  --secondary: oklch(0.24 0.015 30);
+  --secondary-foreground: oklch(0.97 0.01 80);
+  --muted: oklch(0.22 0.012 30);
+  --muted-foreground: oklch(0.70 0.02 60);
+  --accent: oklch(0.55 0.18 45);
+  --accent-foreground: oklch(0.98 0.01 80);
+  --destructive: oklch(0.55 0.24 25);
+  --destructive-foreground: oklch(0.98 0.01 80);
+  --border: oklch(0.28 0.015 30);
+  --input: oklch(0.22 0.012 30);
+  --ring: oklch(0.62 0.22 27);
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
+  }
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+}
+
+/* Big tap-friendly button used in the Sales view */
+.tap-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(155deg, oklch(0.22 0.013 30), oklch(0.15 0.012 30));
+  border: 1px solid var(--color-border);
+  color: var(--color-foreground);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition: transform 80ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  box-shadow: 0 1px 0 oklch(1 0 0 / 0.04) inset, 0 8px 24px -12px oklch(0 0 0 / 0.6);
+}
+.tap-btn:active {
+  transform: scale(0.97);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px oklch(0.62 0.22 27 / 0.4), 0 8px 24px -12px oklch(0 0 0 / 0.6);
+}
+.tap-btn[data-flash="true"] {
+  animation: flash 350ms ease-out;
+}
+@keyframes flash {
+  0%   { box-shadow: 0 0 0 0 oklch(0.62 0.22 27 / 0.7); }
+  100% { box-shadow: 0 0 0 14px oklch(0.62 0.22 27 / 0); }
+}

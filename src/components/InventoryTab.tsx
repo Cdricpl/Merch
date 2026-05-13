@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useConcerts } from "@/hooks/useConcerts";
 import { toast } from "sonner";
@@ -17,13 +17,13 @@ export function InventoryTab({ bandId }: { bandId: string }) {
 
   const { concerts } = useConcerts(bandId);
 
-  const reloadProducts = async () => {
+  const reloadProducts = useCallback(async () => {
     const { data, error } = await supabase.from("products").select("*").eq("band_id", bandId).order("sort_order");
     if (error) { toast.error(error.message); return; }
     setProducts((data ?? []) as Product[]);
-  };
+  }, [bandId]);
 
-  useEffect(() => { reloadProducts(); }, [bandId]);
+  useEffect(() => { reloadProducts(); }, [reloadProducts]);
 
   // Auto-select active concert on initial load
   useEffect(() => {

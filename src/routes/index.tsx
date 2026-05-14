@@ -5,6 +5,7 @@ import { SalesTab } from "@/components/SalesTab";
 import { InventoryTab } from "@/components/InventoryTab";
 import { ConcertsTab } from "@/components/ConcertsTab";
 import { BAND_ID, BAND_NAME } from "@/lib/band";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 
 export const Route = createFileRoute("/")({ component: Index });
 
@@ -12,6 +13,7 @@ type Tab = "sales" | "inventory" | "concerts";
 
 function Index() {
   const [tab, setTab] = useState<Tab>("sales");
+  const isOnline = useOnlineStatus();
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background">
@@ -19,6 +21,12 @@ function Index() {
         <h1 className="font-display text-lg leading-none text-primary">{BAND_NAME}</h1>
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground mt-1">Merch counter</p>
       </header>
+
+      {!isOnline && (
+        <div className="bg-amber-950/80 text-amber-300 text-xs text-center py-1.5 px-4 border-b border-amber-900/60">
+          Hors-ligne — données en cache
+        </div>
+      )}
 
       <main className="flex-1 overflow-y-auto pb-24">
         {tab === "sales" && <SalesTab bandId={BAND_ID} />}

@@ -4,18 +4,20 @@ import { useConcerts, type Concert } from "@/hooks/useConcerts";
 import { formatEUR } from "@/lib/format";
 import { toast } from "sonner";
 import { Plus, Minus, Calendar } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Product = { id: string; name: string; variant: string | null; price_cents: number; sort_order: number };
 type SaleRow = { id: string; product_id: string; quantity: number; unit_price_cents: number };
 
 export function SalesTab({ bandId }: { bandId: string }) {
   const [products, setProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [concert, setConcert] = useState<Concert | null>(null);
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [picker, setPicker] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
-  const { concerts, reload: reloadConcerts } = useConcerts(bandId);
+  const { concerts, reload: reloadConcerts, loading: loadingConcerts } = useConcerts(bandId);
 
   // Load current user for sold_by tracking
   useEffect(() => {
@@ -24,8 +26,10 @@ export function SalesTab({ bandId }: { bandId: string }) {
 
   // Load products
   useEffect(() => {
+    setLoadingProducts(true);
     supabase.from("products").select("*").eq("band_id", bandId).order("sort_order")
       .then(({ data, error }) => {
+        setLoadingProducts(false);
         if (error) { toast.error(error.message); return; }
         setProducts((data ?? []) as Product[]);
       });
@@ -122,6 +126,17 @@ export function SalesTab({ bandId }: { bandId: string }) {
     toast.success("Concert créé");
   };
 
+  if (!concert && loadingConcerts) {
+    return (
+      <div className="px-3 pt-3">
+        <Skeleton className="w-full h-[76px] rounded-lg mb-3" />
+        <div className="grid grid-cols-2 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="aspect-square rounded-xl" />)}
+        </div>
+      </div>
+    );
+  }
+
   if (!concert && concerts.length === 0) {
     return (
       <div className="px-6 py-12 text-center space-y-4">
@@ -153,9 +168,12 @@ export function SalesTab({ bandId }: { bandId: string }) {
 
       {/* Big buttons grid */}
       <div className="grid grid-cols-2 gap-3">
-        {products.map((p) => (
-          <SaleButton key={p.id} product={p} count={counts.get(p.id) ?? 0} onAdd={() => addSale(p)} onRemove={() => removeSale(p.id)} />
-        ))}
+        {loadingProducts
+          ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="aspect-square rounded-xl" />)
+          : products.map((p) => (
+              <SaleButton key={p.id} product={p} count={counts.get(p.id) ?? 0} onAdd={() => addSale(p)} onRemove={() => removeSale(p.id)} />
+            ))
+        }
       </div>
 
       {picker && (

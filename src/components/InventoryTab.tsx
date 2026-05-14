@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useConcerts } from "@/hooks/useConcerts";
 import { toast } from "sonner";
 import { Plus, Trash2, X } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Product = { id: string; name: string; variant: string | null; price_cents: number; sort_order: number };
 type Inv = { id: string; product_id: string; initial_stock: number; manual_remaining: number | null };
@@ -10,15 +11,18 @@ type SaleAgg = Record<string, number>;
 
 export function InventoryTab({ bandId }: { bandId: string }) {
   const [products, setProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [concertId, setConcertId] = useState<string | null>(null);
   const [inv, setInv] = useState<Inv[]>([]);
   const [sold, setSold] = useState<SaleAgg>({});
   const [showAdd, setShowAdd] = useState(false);
 
-  const { concerts } = useConcerts(bandId);
+  const { concerts, loading: loadingConcerts } = useConcerts(bandId);
 
   const reloadProducts = useCallback(async () => {
+    setLoadingProducts(true);
     const { data, error } = await supabase.from("products").select("*").eq("band_id", bandId).order("sort_order");
+    setLoadingProducts(false);
     if (error) { toast.error(error.message); return; }
     setProducts((data ?? []) as Product[]);
   }, [bandId]);
@@ -116,6 +120,9 @@ export function InventoryTab({ bandId }: { bandId: string }) {
       </div>
 
       <div className="space-y-2">
+        {(loadingProducts || loadingConcerts) && products.length === 0 ? (
+          Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[120px] rounded-lg" />)
+        ) : null}
         {products.map((p) => {
           const i = inv.find((x) => x.product_id === p.id);
           const initial = i?.initial_stock ?? 0;

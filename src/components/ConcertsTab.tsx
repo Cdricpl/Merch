@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatEUR } from "@/lib/format";
 import { toast } from "sonner";
 import { ChevronLeft, Plus, Trash2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Concert = { id: string; name: string; concert_date: string; notes: string | null; is_active: boolean };
 type Product = { id: string; name: string; variant: string | null };
@@ -13,11 +14,13 @@ export function ConcertsTab({ bandId }: { bandId: string }) {
   const [totals, setTotals] = useState<Record<string, { items: number; cents: number }>>({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    setLoading(true);
     const { data: cs, error: ce } = await supabase.from("concerts").select("*").eq("band_id", bandId)
       .order("concert_date", { ascending: false }).order("created_at", { ascending: false });
-    if (ce) { toast.error(ce.message); return; }
+    if (ce) { setLoading(false); toast.error(ce.message); return; }
     setConcerts((cs ?? []) as Concert[]);
 
     const { data: sales, error: se } = await supabase.from("sales")
@@ -31,6 +34,7 @@ export function ConcertsTab({ bandId }: { bandId: string }) {
       map[s.concert_id] = cur;
     });
     setTotals(map);
+    setLoading(false);
   }, [bandId]);
 
   useEffect(() => { load(); }, [load]);
@@ -46,7 +50,11 @@ export function ConcertsTab({ bandId }: { bandId: string }) {
         <Plus className="h-4 w-4" /> Nouveau concert
       </button>
 
-      {concerts.length === 0 && (
+      {loading && concerts.length === 0 && (
+        Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[62px] rounded-lg" />)
+      )}
+
+      {!loading && concerts.length === 0 && (
         <p className="text-center text-muted-foreground py-12">Aucun concert encore.</p>
       )}
 

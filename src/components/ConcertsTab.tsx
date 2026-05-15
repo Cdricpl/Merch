@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatEUR } from "@/lib/format";
 import { toast } from "sonner";
 import { ChevronLeft, Plus, Trash2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Concert = { id: string; name: string; concert_date: string; notes: string | null; is_active: boolean };
 type Product = { id: string; name: string; variant: string | null };
@@ -13,14 +14,18 @@ export function ConcertsTab({ bandId }: { bandId: string }) {
   const [totals, setTotals] = useState<Record<string, { items: number; cents: number }>>({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const load = async () => {
-    const { data: cs } = await supabase.from("concerts").select("*").eq("band_id", bandId)
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data: cs, error: ce } = await supabase.from("concerts").select("*").eq("band_id", bandId)
       .order("concert_date", { ascending: false }).order("created_at", { ascending: false });
-    const list = (cs ?? []) as Concert[];
-    setConcerts(list);
+    if (ce) { setLoading(false); toast.error(ce.message); return; }
+    setConcerts((cs ?? []) as Concert[]);
 
-    const { data: sales } = await supabase.from("sales").select("concert_id, quantity, unit_price_cents").eq("band_id", bandId);
+    const { data: sales, error: se } = await supabase.from("sales")
+      .select("concert_id, quantity, unit_price_cents").eq("band_id", bandId);
+    if (se) { toast.error(se.message); return; }
     const map: Record<string, { items: number; cents: number }> = {};
     (sales ?? []).forEach((s: { concert_id: string; quantity: number; unit_price_cents: number }) => {
       const cur = map[s.concert_id] ?? { items: 0, cents: 0 };
@@ -29,9 +34,10 @@ export function ConcertsTab({ bandId }: { bandId: string }) {
       map[s.concert_id] = cur;
     });
     setTotals(map);
-  };
+    setLoading(false);
+  }, [bandId]);
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [bandId]);
+  useEffect(() => { load(); }, [load]);
 
   if (openId) {
     const c = concerts.find((x) => x.id === openId);
@@ -44,7 +50,11 @@ export function ConcertsTab({ bandId }: { bandId: string }) {
         <Plus className="h-4 w-4" /> Nouveau concert
       </button>
 
-      {concerts.length === 0 && (
+      {loading && concerts.length === 0 && (
+        Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[62px] rounded-lg" />)
+      )}
+
+      {!loading && concerts.length === 0 && (
         <p className="text-center text-muted-foreground py-12">Aucun concert encore.</p>
       )}
 
@@ -79,9 +89,15 @@ function ConcertDetail({ concert, bandId, onBack, onDeleted }: { concert: Concer
 
   useEffect(() => {
     supabase.from("products").select("id, name, variant").eq("band_id", bandId).order("sort_order")
-      .then(({ data }) => setProducts((data ?? []) as Product[]));
+      .then(({ data, error }) => {
+        if (error) { toast.error(error.message); return; }
+        setProducts((data ?? []) as Product[]);
+      });
     supabase.from("sales").select("product_id, quantity, unit_price_cents").eq("concert_id", concert.id)
-      .then(({ data }) => setSales((data ?? []) as Sale[]));
+      .then(({ data, error }) => {
+        if (error) { toast.error(error.message); return; }
+        setSales((data ?? []) as Sale[]);
+      });
   }, [bandId, concert.id]);
 
   const save = async () => {
@@ -99,18 +115,22 @@ function ConcertDetail({ concert, bandId, onBack, onDeleted }: { concert: Concer
     onDeleted();
   };
 
-  const byProduct = new Map<string, { qty: number; cents: number }>();
-  sales.forEach((s) => {
-    const cur = byProduct.get(s.product_id) ?? { qty: 0, cents: 0 };
-    cur.qty += s.quantity;
-    cur.cents += s.quantity * s.unit_price_cents;
-    byProduct.set(s.product_id, cur);
-  });
-  const total = sales.reduce((sum, s) => sum + s.quantity * s.unit_price_cents, 0);
+  const byProduct = useMemo(() => {
+    const map = new Map<string, { qty: number; cents: number }>();
+    sales.forEach((s) => {
+      const cur = map.get(s.product_id) ?? { qty: 0, cents: 0 };
+      cur.qty += s.quantity;
+      cur.cents += s.quantity * s.unit_price_cents;
+      map.set(s.product_id, cur);
+    });
+    return map;
+  }, [sales]);
+
+  const total = useMemo(() => sales.reduce((sum, s) => sum + s.quantity * s.unit_price_cents, 0), [sales]);
 
   return (
     <div className="px-4 pt-4 space-y-4">
-      <button onClick={onBack} className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+      <button onClick={onBack} aria-label="Retour" className="inline-flex items-center gap-1 text-sm text-muted-foreground">
         <ChevronLeft className="h-4 w-4" /> Retour
       </button>
 
@@ -149,7 +169,7 @@ function ConcertDetail({ concert, bandId, onBack, onDeleted }: { concert: Concer
 
       <div className="flex gap-2">
         <button onClick={save} className="flex-1 rounded-md bg-primary text-primary-foreground font-display tracking-wider py-3">Enregistrer</button>
-        <button onClick={remove} className="rounded-md border border-border p-3 text-destructive">
+        <button onClick={remove} aria-label="Supprimer ce concert" className="rounded-md border border-border p-3 text-destructive">
           <Trash2 className="h-5 w-5" />
         </button>
       </div>
@@ -161,6 +181,7 @@ function NewConcertSheet({ bandId, onClose, onCreated }: { bandId: string; onClo
   const [name, setName] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
+
   const create = async () => {
     if (!name.trim()) return;
     setBusy(true);
@@ -172,6 +193,7 @@ function NewConcertSheet({ bandId, onClose, onCreated }: { bandId: string; onClo
     onCreated();
     onClose();
   };
+
   return (
     <div className="fixed inset-0 bg-black/70 z-30 flex items-end" onClick={onClose}>
       <div className="w-full bg-card border-t border-border rounded-t-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>

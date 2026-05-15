@@ -29,7 +29,7 @@ function Index() {
       )}
 
       <main className="flex-1 overflow-y-auto pb-24">
-        {tab === "sales" && <SalesTab bandId={BAND_ID} />}
+        {tab === "sales" && <SalesTab bandId={BAND_ID} onNavigateToConcerts={() => setTab("concerts")} />}
         {tab === "inventory" && <InventoryTab bandId={BAND_ID} />}
         {tab === "concerts" && <ConcertsTab bandId={BAND_ID} />}
       </main>

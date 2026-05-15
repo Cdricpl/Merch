@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 type Product = { id: string; name: string; variant: string | null; price_cents: number; sort_order: number };
 type SaleRow = { id: string; product_id: string; quantity: number; unit_price_cents: number };
 
-export function SalesTab({ bandId, onNavigateToConcerts }: { bandId: string; onNavigateToConcerts?: () => void }) {
+export function SalesTab({ bandId }: { bandId: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [concert, setConcert] = useState<Concert | null>(null);
@@ -141,12 +141,9 @@ export function SalesTab({ bandId, onNavigateToConcerts }: { bandId: string; onN
     return (
       <div className="px-6 py-12 text-center space-y-4">
         <h2 className="font-display text-2xl">Aucun concert</h2>
-        <p className="text-muted-foreground">Crée d'abord une fiche concert dans l'onglet Recettes.</p>
-        <button
-          onClick={onNavigateToConcerts ?? createConcertNow}
-          className="rounded-md bg-primary text-primary-foreground font-display tracking-wider px-6 py-3"
-        >
-          Aller aux Recettes
+        <p className="text-muted-foreground">Crée une fiche concert pour commencer à compter les ventes.</p>
+        <button onClick={createConcertNow} className="rounded-md bg-primary text-primary-foreground font-display tracking-wider px-6 py-3">
+          Nouveau concert
         </button>
       </div>
     );

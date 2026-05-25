@@ -7,7 +7,7 @@ import { Plus, Minus, Calendar } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NewConcertSheet } from "@/components/NewConcertSheet";
 
-type Product = { id: string; name: string; variant: string | null; price_cents: number; sort_order: number };
+type Product = { id: string; name: string; variant: string | null; price_cents: number; stock: number; sort_order: number };
 type SaleRow = { id: string; product_id: string; quantity: number; unit_price_cents: number };
 
 export function SalesTab({ bandId }: { bandId: string }) {
@@ -26,15 +26,29 @@ export function SalesTab({ bandId }: { bandId: string }) {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  // Load products
+  // Load products + realtime subscription to keep stock in sync across devices
   useEffect(() => {
     setLoadingProducts(true);
-    supabase.from("products").select("*").eq("band_id", bandId).order("sort_order")
+    supabase.from("products").select("id, name, variant, price_cents, stock, sort_order").eq("band_id", bandId).order("sort_order")
       .then(({ data, error }) => {
         setLoadingProducts(false);
         if (error) { toast.error(error.message); return; }
         setProducts((data ?? []) as Product[]);
       });
+
+    const ch = supabase
+      .channel(`products:${bandId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `band_id=eq.${bandId}` }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          setProducts((prev) => [...prev, payload.new as Product].sort((a, b) => a.sort_order - b.sort_order));
+        } else if (payload.eventType === "UPDATE") {
+          setProducts((prev) => prev.map((p) => p.id === (payload.new as Product).id ? payload.new as Product : p));
+        } else if (payload.eventType === "DELETE") {
+          setProducts((prev) => prev.filter((p) => p.id !== (payload.old as Product).id));
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, [bandId]);
 
   // Auto-select concert on initial load only
@@ -92,6 +106,7 @@ export function SalesTab({ bandId }: { bandId: string }) {
     const tempId = `temp-${crypto.randomUUID()}`;
     const optimistic: SaleRow = { id: tempId, product_id: p.id, quantity: 1, unit_price_cents: p.price_cents };
     setSales((prev) => [...prev, optimistic]);
+    setProducts((prev) => prev.map((x) => x.id === p.id ? { ...x, stock: x.stock - 1 } : x));
     const { data, error } = await supabase.from("sales").insert({
       concert_id: concert.id, product_id: p.id, band_id: bandId,
       quantity: 1, unit_price_cents: p.price_cents,
@@ -99,6 +114,7 @@ export function SalesTab({ bandId }: { bandId: string }) {
     }).select("id, product_id, quantity, unit_price_cents").single();
     if (error) {
       setSales((prev) => prev.filter((s) => s.id !== tempId));
+      setProducts((prev) => prev.map((x) => x.id === p.id ? { ...x, stock: x.stock + 1 } : x));
       toast.error("Erreur : " + error.message);
     } else if (data) {
       setSales((prev) => prev.map((s) => s.id === tempId ? data as SaleRow : s));
@@ -111,9 +127,14 @@ export function SalesTab({ bandId }: { bandId: string }) {
     if (!candidate) return;
     if (navigator.vibrate) navigator.vibrate(60);
     setSales((prev) => prev.filter((s) => s.id !== candidate.id));
+    setProducts((prev) => prev.map((x) => x.id === productId ? { ...x, stock: x.stock + 1 } : x));
     if (candidate.id.startsWith("temp-")) return;
     const { error } = await supabase.from("sales").delete().eq("id", candidate.id);
-    if (error) toast.error("Annulation impossible");
+    if (error) {
+      setSales((prev) => [...prev, candidate]);
+      setProducts((prev) => prev.map((x) => x.id === productId ? { ...x, stock: x.stock - 1 } : x));
+      toast.error("Annulation impossible");
+    }
   };
 
   const onConcertCreated = async () => {
@@ -206,8 +227,13 @@ export function SalesTab({ bandId }: { bandId: string }) {
 
 function SaleButton({ product, count, onAdd, onRemove }: { product: Product; count: number; onAdd: () => void; onRemove: () => void }) {
   const [flash, setFlash] = useState(false);
+  const outOfStock = product.stock <= 0;
 
   const handleAdd = () => {
+    if (outOfStock) {
+      toast.error("Stock épuisé");
+      return;
+    }
     onAdd();
     setFlash(true);
     setTimeout(() => setFlash(false), 350);
@@ -218,12 +244,16 @@ function SaleButton({ product, count, onAdd, onRemove }: { product: Product; cou
       <button
         onClick={handleAdd}
         data-flash={flash}
-        className="tap-btn w-full aspect-square p-3"
+        disabled={outOfStock}
+        className="tap-btn w-full aspect-square p-3 disabled:opacity-40"
       >
         <div className="text-[11px] uppercase tracking-wider text-muted-foreground text-center">{product.name}</div>
         {product.variant && <div className="font-display text-3xl text-foreground mt-0.5">{product.variant}</div>}
         <div className="font-display text-5xl text-primary mt-auto leading-none">{count}</div>
         <div className="text-[11px] text-muted-foreground mt-1">{formatEUR(product.price_cents)}</div>
+        <div className={`absolute top-2 left-2 text-[11px] font-semibold ${product.stock <= 3 ? "text-destructive" : "text-muted-foreground"}`}>
+          {product.stock}
+        </div>
         <Plus className="absolute top-2 right-2 h-4 w-4 text-muted-foreground" />
       </button>
       {count > 0 && (

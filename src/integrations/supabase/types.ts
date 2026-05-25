@@ -165,6 +165,7 @@ export type Database = {
           name: string
           price_cents: number
           sort_order: number
+          stock: number
           variant: string | null
         }
         Insert: {
@@ -174,6 +175,7 @@ export type Database = {
           name: string
           price_cents?: number
           sort_order?: number
+          stock?: number
           variant?: string | null
         }
         Update: {
@@ -183,6 +185,7 @@ export type Database = {
           name?: string
           price_cents?: number
           sort_order?: number
+          stock?: number
           variant?: string | null
         }
         Relationships: [

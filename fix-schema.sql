@@ -89,3 +89,40 @@ ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Open access" ON public.inventory;
 CREATE POLICY "Open access" ON public.inventory
   FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- 7. Insérer tous les articles (CD 10€, T-shirt 15€, Décapsuleur 5€)
+INSERT INTO public.products (band_id, name, variant, price_cents, sort_order) VALUES
+  -- CDs (10€)
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'CD', 'No Nut''s no Glory',    1000, 10),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'CD', 'The EP with no names',  1000, 20),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'CD', '20th Anniversaire',     1000, 30),
+
+  -- Décapsuleur (5€)
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'Décapsuleur', NULL,           500,  40),
+
+  -- Negan Homme (15€)
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'Negan H',   '2XL',           1500, 110),
+
+  -- Ardenne Heavy Femme (15€)
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'AH Femme',  'S',             1500, 120),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'AH Femme',  'M',             1500, 121),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'AH Femme',  'L',             1500, 122),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'AH Femme',  'XL',            1500, 123),
+
+  -- Ardenne Heavy Homme (15€)
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'AH Homme',  'S',             1500, 130),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'AH Homme',  'M',             1500, 131),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'AH Homme',  'L',             1500, 132),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'AH Homme',  'XL',            1500, 133),
+
+  -- Boris Femme (15€)
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'Boris F',   'S',             1500, 140),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'Boris F',   'M',             1500, 141),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'Boris F',   'L',             1500, 142),
+
+  -- Boris Homme (15€)
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'Boris H',   'S',             1500, 150),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'Boris H',   'M',             1500, 151),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'Boris H',   'L',             1500, 152),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'Boris H',   'XL',            1500, 153),
+  ('d87f9ff0-87ff-4b36-a060-498d5f822f0f', 'Boris H',   '2XL',           1500, 154);

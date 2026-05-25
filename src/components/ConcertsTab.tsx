@@ -25,7 +25,7 @@ export function ConcertsTab({ bandId }: { bandId: string }) {
 
     const { data: sales, error: se } = await supabase.from("sales")
       .select("concert_id, quantity, unit_price_cents").eq("band_id", bandId);
-    if (se) { toast.error(se.message); return; }
+    if (se) { setLoading(false); toast.error(se.message); return; }
     const map: Record<string, { items: number; cents: number }> = {};
     (sales ?? []).forEach((s: { concert_id: string; quantity: number; unit_price_cents: number }) => {
       const cur = map[s.concert_id] ?? { items: 0, cents: 0 };

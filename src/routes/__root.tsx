@@ -67,7 +67,7 @@ function NotFound() {
       <div className="text-center">
         <h1 className="font-display text-6xl text-primary">404</h1>
         <p className="mt-2 text-muted-foreground">Cette page n'existe pas.</p>
-        <a href="/" className="mt-6 inline-block rounded-md bg-primary px-4 py-2 text-primary-foreground font-semibold">Retour</a>
+        <a href={import.meta.env.BASE_URL} className="mt-6 inline-block rounded-md bg-primary px-4 py-2 text-primary-foreground font-semibold">Retour</a>
       </div>
     </div>
   );

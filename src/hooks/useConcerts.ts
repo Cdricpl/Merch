@@ -22,7 +22,7 @@ function writeCache(bandId: string, data: Concert[]) {
 
 export function useConcerts(bandId: string) {
   const [concerts, setConcerts] = useState<Concert[]>(() => readCache(bandId));
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => readCache(bandId).length === 0);
 
   const reload = useCallback(async () => {
     setLoading(true);

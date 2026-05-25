@@ -40,20 +40,34 @@ export function InventoryTab({ bandId }: { bandId: string }) {
 
   useEffect(() => {
     if (!concertId) { setInv([]); setSold({}); return; }
+
     supabase.from("inventory").select("id, product_id, initial_stock, manual_remaining").eq("concert_id", concertId)
       .then(({ data, error }) => {
         if (error) { toast.error(error.message); return; }
         setInv((data ?? []) as Inv[]);
       });
-    supabase.from("sales").select("product_id, quantity").eq("concert_id", concertId)
-      .then(({ data, error }) => {
-        if (error) { toast.error(error.message); return; }
-        const agg: SaleAgg = {};
-        (data ?? []).forEach((s: { product_id: string; quantity: number }) => {
-          agg[s.product_id] = (agg[s.product_id] ?? 0) + s.quantity;
-        });
-        setSold(agg);
+
+    const refreshSales = async () => {
+      const { data, error } = await supabase
+        .from("sales").select("product_id, quantity").eq("concert_id", concertId);
+      if (error) { toast.error(error.message); return; }
+      const agg: SaleAgg = {};
+      (data ?? []).forEach((s: { product_id: string; quantity: number }) => {
+        agg[s.product_id] = (agg[s.product_id] ?? 0) + s.quantity;
       });
+      setSold(agg);
+    };
+    refreshSales();
+
+    const ch = supabase
+      .channel(`inventory-sales:${concertId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales", filter: `concert_id=eq.${concertId}` }, refreshSales)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory", filter: `concert_id=eq.${concertId}` }, () => {
+        supabase.from("inventory").select("id, product_id, initial_stock, manual_remaining").eq("concert_id", concertId)
+          .then(({ data }) => { if (data) setInv(data as Inv[]); });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, [concertId]);
 
   const setInitial = async (productId: string, value: number) => {

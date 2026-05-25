@@ -4,6 +4,7 @@ import { formatEUR } from "@/lib/format";
 import { toast } from "sonner";
 import { ChevronLeft, Plus, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { NewConcertSheet } from "@/components/NewConcertSheet";
 
 type Concert = { id: string; name: string; concert_date: string; notes: string | null; is_active: boolean };
 type Product = { id: string; name: string; variant: string | null };
@@ -177,35 +178,3 @@ function ConcertDetail({ concert, bandId, onBack, onDeleted }: { concert: Concer
   );
 }
 
-function NewConcertSheet({ bandId, onClose, onCreated }: { bandId: string; onClose: () => void; onCreated: () => void }) {
-  const [name, setName] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [busy, setBusy] = useState(false);
-
-  const create = async () => {
-    if (!name.trim()) return;
-    setBusy(true);
-    const { error } = await supabase.from("concerts").insert({
-      band_id: bandId, name: name.trim(), concert_date: date, is_active: true,
-    });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    onCreated();
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/70 z-30 flex items-end" onClick={onClose}>
-      <div className="w-full bg-card border-t border-border rounded-t-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display text-xl">Nouveau concert</h2>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom (ex: Durbuy Rock)"
-          className="w-full rounded-md bg-input border border-border px-3 py-3" />
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-          className="w-full rounded-md bg-input border border-border px-3 py-3" />
-        <button onClick={create} disabled={busy} className="w-full rounded-md bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50">
-          Créer
-        </button>
-      </div>
-    </div>
-  );
-}

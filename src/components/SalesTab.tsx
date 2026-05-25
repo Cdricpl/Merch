@@ -5,6 +5,7 @@ import { formatEUR } from "@/lib/format";
 import { toast } from "sonner";
 import { Plus, Minus, Calendar } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { NewConcertSheet } from "@/components/NewConcertSheet";
 
 type Product = { id: string; name: string; variant: string | null; price_cents: number; sort_order: number };
 type SaleRow = { id: string; product_id: string; quantity: number; unit_price_cents: number };
@@ -88,7 +89,7 @@ export function SalesTab({ bandId }: { bandId: string }) {
   const addSale = async (p: Product) => {
     if (!concert) return;
     if (navigator.vibrate) navigator.vibrate(30);
-    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const tempId = `temp-${crypto.randomUUID()}`;
     const optimistic: SaleRow = { id: tempId, product_id: p.id, quantity: 1, unit_price_cents: p.price_cents };
     setSales((prev) => [...prev, optimistic]);
     const { data, error } = await supabase.from("sales").insert({
@@ -199,41 +200,6 @@ export function SalesTab({ bandId }: { bandId: string }) {
       {showNewConcert && (
         <NewConcertSheet bandId={bandId} onClose={() => setShowNewConcert(false)} onCreated={onConcertCreated} />
       )}
-    </div>
-  );
-}
-
-function NewConcertSheet({ bandId, onClose, onCreated }: { bandId: string; onClose: () => void; onCreated: () => void }) {
-  const [name, setName] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [busy, setBusy] = useState(false);
-
-  const create = async () => {
-    if (!name.trim()) return;
-    setBusy(true);
-    const { data, error } = await supabase.from("concerts").insert({
-      band_id: bandId, name: name.trim(), concert_date: date, is_active: true,
-    }).select().single();
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    await onCreated();
-    toast.success("Concert créé");
-    onClose();
-    return data;
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/70 z-30 flex items-end" onClick={onClose}>
-      <div className="w-full bg-card border-t border-border rounded-t-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display text-xl">Nouveau concert</h2>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom (ex: Durbuy Rock)"
-          className="w-full rounded-md bg-input border border-border px-3 py-3" autoFocus />
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-          className="w-full rounded-md bg-input border border-border px-3 py-3" />
-        <button onClick={create} disabled={busy} className="w-full rounded-md bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50">
-          Créer
-        </button>
-      </div>
     </div>
   );
 }

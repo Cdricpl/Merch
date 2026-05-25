@@ -1,4 +1,5 @@
-const CACHE = 'ah-merch-v1';
+const CACHE = 'ah-merch-v2';
+const SCOPE_PATH = new URL(self.registration.scope).pathname;
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -16,8 +17,22 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
-  // Only cache same-origin requests; skip Supabase API calls
+
   if (url.origin !== self.location.origin) return;
+  if (!url.pathname.startsWith(SCOPE_PATH)) return;
+
+  // Always go network-first for HTML so a deploy updates immediately.
+  const isHTML = e.request.mode === 'navigate' ||
+    (e.request.headers.get('accept') || '').includes('text/html');
+
+  if (isHTML) {
+    e.respondWith(
+      fetch(e.request).catch(() =>
+        caches.open(CACHE).then((c) => c.match(e.request).then((r) => r || Response.error()))
+      )
+    );
+    return;
+  }
 
   e.respondWith(
     caches.open(CACHE).then((cache) =>
@@ -26,7 +41,6 @@ self.addEventListener('fetch', (e) => {
           if (res.ok) cache.put(e.request, res.clone());
           return res;
         }).catch(() => cached);
-        // Serve cached while fetching fresh (stale-while-revalidate)
         return cached || network;
       })
     )

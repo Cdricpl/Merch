@@ -1,11 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { ShoppingBag, Boxes, Receipt } from "lucide-react";
+import { ShoppingBag, Boxes, Receipt, RefreshCw } from "lucide-react";
 import { SalesTab } from "@/components/SalesTab";
 import { InventoryTab } from "@/components/InventoryTab";
 import { ConcertsTab } from "@/components/ConcertsTab";
 import { BAND_ID, BAND_NAME } from "@/lib/band";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+
+async function forceRefresh() {
+  try {
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+  } catch {}
+  window.location.reload();
+}
 
 export const Route = createFileRoute("/")({ component: Index });
 
@@ -17,9 +31,18 @@ function Index() {
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background">
-      <header className="px-4 pt-4 pb-3 border-b border-border sticky top-0 bg-background/95 backdrop-blur z-10">
-        <h1 className="font-display text-lg leading-none text-primary">{BAND_NAME}</h1>
-        <p className="text-[11px] uppercase tracking-wider text-muted-foreground mt-1">Merch counter</p>
+      <header className="px-4 pt-4 pb-3 border-b border-border sticky top-0 bg-background/95 backdrop-blur z-10 flex items-center justify-between">
+        <div>
+          <h1 className="font-display text-lg leading-none text-primary">{BAND_NAME}</h1>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground mt-1">Merch counter</p>
+        </div>
+        <button
+          onClick={forceRefresh}
+          aria-label="Forcer le rafraîchissement de l'app"
+          className="p-2 -mr-2 text-muted-foreground active:scale-90 transition"
+        >
+          <RefreshCw className="h-5 w-5" />
+        </button>
       </header>
 
       {!isOnline && (

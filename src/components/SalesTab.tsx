@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useConcerts, type Concert } from "@/hooks/useConcerts";
 import { formatEUR } from "@/lib/format";
@@ -194,8 +195,8 @@ export function SalesTab({ bandId }: { bandId: string }) {
         }
       </div>
 
-      {picker && (
-        <div className="fixed inset-0 bg-black/70 z-30 flex items-end" onClick={() => setPicker(false)}>
+      {picker && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 bg-black/70 z-[100] flex items-end" onClick={() => setPicker(false)}>
           <div className="w-full bg-card border-t border-border rounded-t-2xl p-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-display text-xl">Choisir un concert</h2>
@@ -215,7 +216,8 @@ export function SalesTab({ bandId }: { bandId: string }) {
               ))}
             </ul>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {showNewConcert && (

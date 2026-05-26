@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
@@ -13,10 +14,24 @@ type Product = {
   sort_order: number;
 };
 
+const CACHE_KEY = (bandId: string) => `cache:products:${bandId}`;
+
+function readCache(bandId: string): Product[] {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY(bandId));
+    return raw ? (JSON.parse(raw) as Product[]) : [];
+  } catch { return []; }
+}
+
+function writeCache(bandId: string, data: Product[]) {
+  try { localStorage.setItem(CACHE_KEY(bandId), JSON.stringify(data)); } catch {}
+}
+
 export function InventoryTab({ bandId }: { bandId: string }) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>(() => readCache(bandId));
+  const [loading, setLoading] = useState(() => readCache(bandId).length === 0);
   const [showAdd, setShowAdd] = useState(false);
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -27,7 +42,9 @@ export function InventoryTab({ bandId }: { bandId: string }) {
       .order("sort_order");
     setLoading(false);
     if (error) { toast.error(error.message); return; }
-    setProducts((data ?? []) as Product[]);
+    const result = (data ?? []) as Product[];
+    setProducts(result);
+    writeCache(bandId, result);
   }, [bandId]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -38,35 +55,59 @@ export function InventoryTab({ bandId }: { bandId: string }) {
       .channel(`inventory-products:${bandId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `band_id=eq.${bandId}` }, (payload) => {
         if (payload.eventType === "INSERT") {
-          setProducts((prev) => [...prev, payload.new as Product].sort((a, b) => a.sort_order - b.sort_order));
+          setProducts((prev) => {
+            const next = [...prev, payload.new as Product].sort((a, b) => a.sort_order - b.sort_order);
+            writeCache(bandId, next);
+            return next;
+          });
         } else if (payload.eventType === "UPDATE") {
-          setProducts((prev) => prev.map((p) => p.id === (payload.new as Product).id ? payload.new as Product : p));
+          setProducts((prev) => {
+            const next = prev.map((p) => p.id === (payload.new as Product).id ? payload.new as Product : p);
+            writeCache(bandId, next);
+            return next;
+          });
         } else if (payload.eventType === "DELETE") {
-          setProducts((prev) => prev.filter((p) => p.id !== (payload.old as Product).id));
+          setProducts((prev) => {
+            const next = prev.filter((p) => p.id !== (payload.old as Product).id);
+            writeCache(bandId, next);
+            return next;
+          });
         }
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [bandId]);
 
-  const updateStock = async (productId: string, stock: number) => {
+  const updateStock = useCallback((productId: string, stock: number) => {
     const safe = Math.max(0, Math.floor(stock));
     setProducts((p) => p.map((x) => x.id === productId ? { ...x, stock: safe } : x));
-    const { error } = await supabase.from("products").update({ stock: safe }).eq("id", productId);
-    if (error) toast.error(error.message);
-  };
+    const key = productId + ":stock";
+    clearTimeout(timers.current.get(key));
+    timers.current.set(key, setTimeout(async () => {
+      const { error } = await supabase.from("products").update({ stock: safe }).eq("id", productId);
+      if (error) toast.error(error.message);
+    }, 600));
+  }, []);
 
-  const updatePrice = async (productId: string, priceCents: number) => {
+  const updatePrice = useCallback((productId: string, priceCents: number) => {
     setProducts((p) => p.map((x) => x.id === productId ? { ...x, price_cents: priceCents } : x));
-    const { error } = await supabase.from("products").update({ price_cents: priceCents }).eq("id", productId);
-    if (error) toast.error(error.message);
-  };
+    const key = productId + ":price";
+    clearTimeout(timers.current.get(key));
+    timers.current.set(key, setTimeout(async () => {
+      const { error } = await supabase.from("products").update({ price_cents: priceCents }).eq("id", productId);
+      if (error) toast.error(error.message);
+    }, 600));
+  }, []);
 
   const deleteProduct = async (productId: string) => {
     if (!confirm("Supprimer cet article ?")) return;
     const { error } = await supabase.from("products").delete().eq("id", productId);
     if (error) return toast.error(error.message);
-    setProducts((p) => p.filter((x) => x.id !== productId));
+    setProducts((p) => {
+      const next = p.filter((x) => x.id !== productId);
+      writeCache(bandId, next);
+      return next;
+    });
   };
 
   return (
@@ -150,12 +191,14 @@ function AddProductSheet({ bandId, onClose, onCreated }: { bandId: string; onClo
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/70 z-30 flex items-end" onClick={onClose}>
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end" onClick={onClose}>
       <div className="w-full bg-card border-t border-border rounded-t-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-xl">Nouvel article</h2>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom (ex: T-shirt)"
-          className="w-full rounded-md bg-input border border-border px-3 py-3" autoFocus />
+          className="w-full rounded-md bg-input border border-border px-3 py-3" />
         <input value={variant} onChange={(e) => setVariant(e.target.value)} placeholder="Variante (S, M, L… optionnel)"
           className="w-full rounded-md bg-input border border-border px-3 py-3" />
         <div className="grid grid-cols-2 gap-2">
@@ -170,8 +213,11 @@ function AddProductSheet({ bandId, onClose, onCreated }: { bandId: string; onClo
               className="w-full rounded-md bg-input border border-border px-3 py-3" />
           </div>
         </div>
-        <button onClick={create} disabled={busy} className="w-full rounded-md bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50">Créer</button>
+        <button onClick={create} disabled={busy || !name.trim()} className="w-full rounded-md bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50">
+          {busy ? "Création…" : "Créer"}
+        </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

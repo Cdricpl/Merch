@@ -1,4 +1,4 @@
-const CACHE = 'ah-merch-v2';
+const CACHE = 'ah-merch-v3';
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
 
 self.addEventListener('install', () => {
@@ -7,11 +7,12 @@ self.addEventListener('install', () => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then((clients) => clients.forEach((client) => client.postMessage({ type: 'SW_UPDATED' })))
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (e) => {

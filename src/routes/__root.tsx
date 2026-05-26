@@ -48,9 +48,13 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register(import.meta.env.BASE_URL + "sw.js").catch(() => {});
-    }
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register(import.meta.env.BASE_URL + "sw.js").catch(() => {});
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type === "SW_UPDATED") window.location.reload();
+    };
+    navigator.serviceWorker.addEventListener("message", handleMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", handleMessage);
   }, []);
 
   return (

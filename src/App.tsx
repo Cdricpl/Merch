@@ -5,6 +5,7 @@ import { StoreProvider } from "./lib/store";
 import { SalesTab } from "./tabs/SalesTab";
 import { StockTab } from "./tabs/StockTab";
 import { ConcertsTab } from "./tabs/ConcertsTab";
+import { PasscodeGate } from "./components/PasscodeGate";
 
 type Tab = "sales" | "stock" | "concerts";
 
@@ -24,10 +25,12 @@ async function hardRefresh() {
 
 export default function App() {
   return (
-    <StoreProvider>
-      <Shell />
-      <Toaster theme="dark" position="top-center" richColors />
-    </StoreProvider>
+    <PasscodeGate>
+      <StoreProvider>
+        <Shell />
+        <Toaster theme="dark" position="top-center" richColors />
+      </StoreProvider>
+    </PasscodeGate>
   );
 }
 

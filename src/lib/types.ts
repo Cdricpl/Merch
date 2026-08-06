@@ -4,6 +4,7 @@ export type Family = {
   price_cents: number;
   low_alert: number;
   sort_order: number;
+  image?: string | null; // data URL (base64), compressed to ~50-100kB
 };
 
 export type Variant = {
@@ -19,6 +20,7 @@ export type Concert = {
   name: string;
   concert_date: string;
   is_active: boolean;
+  is_closed?: boolean;
   notes: string | null;
 };
 

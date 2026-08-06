@@ -21,7 +21,8 @@ export function SalesTab() {
     if (activeConcertId) {
       return concerts.find((c) => c.id === activeConcertId) ?? null;
     }
-    return concerts.find((c) => c.is_active) ?? concerts[0] ?? null;
+    const open = concerts.filter((c) => !c.is_closed);
+    return open.find((c) => c.is_active) ?? open[0] ?? null;
   }, [concerts, activeConcertId]);
 
   const salesThisConcert = useMemo(
@@ -45,6 +46,10 @@ export function SalesTab() {
 
   const doAddSale = async (family: Family, variant: Variant) => {
     if (!concert) return;
+    if (concert.is_closed) {
+      toast.error("Concert clôturé — impossible d'ajouter des ventes");
+      return;
+    }
     if (navigator.vibrate) navigator.vibrate(20);
     try {
       await recordSale({ concertId: concert.id, variantId: variant.id, priceCents: family.price_cents });
@@ -154,26 +159,35 @@ export function SalesTab() {
                 else setPickerFamily(family);
               }}
               disabled={stock === 0}
-              className="tap-btn w-full aspect-square p-3 disabled:opacity-40"
+              className="tap-btn w-full aspect-square p-2 flex flex-col disabled:opacity-40"
             >
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground text-center leading-tight">
-                {family.name}
-              </div>
-              <div className="font-display text-5xl text-primary mt-auto leading-none">{sold}</div>
-              <div className="text-[11px] text-muted-foreground mt-1">{formatEUR(family.price_cents)}</div>
-              <div
-                className={`absolute top-2 left-2 text-[11px] font-semibold ${
-                  lowStock ? "text-destructive" : "text-muted-foreground"
-                }`}
-              >
-                {stock}
-              </div>
-              {!single && (
-                <div className="absolute top-2 right-2 text-[10px] font-semibold text-muted-foreground">
-                  {items.length} tailles
+              <div className="flex items-start justify-between w-full">
+                <div className="w-9 h-9 rounded-md bg-muted overflow-hidden flex items-center justify-center shrink-0">
+                  {family.image ? (
+                    <img src={family.image} alt="" className="w-full h-full object-cover" />
+                  ) : null}
                 </div>
-              )}
-              {single && <Plus className="absolute top-2 right-2 h-4 w-4 text-muted-foreground" />}
+                <div className="flex flex-col items-end gap-0.5">
+                  <span className={`text-xs font-bold leading-none ${lowStock ? "text-destructive" : "text-muted-foreground"}`}>
+                    {stock}
+                  </span>
+                  {items.length > 1 && (
+                    <span className="text-[9px] text-muted-foreground leading-none">
+                      {items.length} tailles
+                    </span>
+                  )}
+                  {single && <Plus className="h-3 w-3 text-muted-foreground" />}
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center px-1">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight line-clamp-2">
+                  {family.name}
+                </div>
+                <div className="font-display text-4xl text-primary leading-none mt-1">{sold}</div>
+              </div>
+              <div className="text-[10px] text-muted-foreground text-center w-full">
+                {formatEUR(family.price_cents)}
+              </div>
             </button>
           );
         })}
@@ -327,10 +341,17 @@ function ConcertPickerModal({
                   c.id === currentId ? "bg-primary text-primary-foreground" : "bg-muted"
                 }`}
               >
-                <div className="font-semibold">{c.name}</div>
+                <div className="flex items-center gap-2">
+                  <div className="font-semibold">{c.name}</div>
+                  {c.is_closed && (
+                    <span className="text-[9px] uppercase tracking-wider bg-background/40 px-1.5 py-0.5 rounded">
+                      Clôturé
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs opacity-80">
                   {new Date(c.concert_date).toLocaleDateString("fr-BE")}
-                  {c.is_active ? " · actif" : ""}
+                  {c.is_active && !c.is_closed ? " · actif" : ""}
                 </div>
               </button>
             </li>

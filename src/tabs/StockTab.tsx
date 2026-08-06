@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { Plus, Minus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Minus, Trash2, ChevronDown, ChevronRight, Image as ImageIcon, X } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import {
@@ -13,6 +13,7 @@ import {
   updateFamily,
   updateVariant,
 } from "../lib/db";
+import { fileToCompressedDataUrl } from "../lib/image";
 import type { Family, Variant } from "../lib/types";
 
 export function StockTab() {
@@ -43,10 +44,15 @@ export function StockTab() {
                 className="w-full flex items-center gap-2 p-3 text-left"
               >
                 {isOpen ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                 ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 )}
+                <div className="w-10 h-10 rounded-md bg-muted overflow-hidden shrink-0">
+                  {family.image && (
+                    <img src={family.image} alt="" className="w-full h-full object-cover" />
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold truncate">{family.name}</div>
                   <div className="text-xs text-muted-foreground">
@@ -92,6 +98,34 @@ function FamilyEditor({
 }) {
   const [replenishFor, setReplenishFor] = useState<Variant | null>(null);
   const [addVariantOpen, setAddVariantOpen] = useState(false);
+  const [uploadingImg, setUploadingImg] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onImageChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reset so re-picking the same file re-fires
+    if (!file) return;
+    setUploadingImg(true);
+    try {
+      const dataUrl = await fileToCompressedDataUrl(file);
+      // Firestore doc limit ~1 MB. base64 * 4/3 → cap around 700 kB source
+      if (dataUrl.length > 900_000) {
+        toast.error("Image trop lourde après compression, essaie une autre.");
+      } else {
+        await updateFamily(family.id, { image: dataUrl });
+        toast.success("Image mise à jour");
+      }
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setUploadingImg(false);
+    }
+  };
+
+  const clearImage = async () => {
+    try { await updateFamily(family.id, { image: null }); }
+    catch (e) { toast.error((e as Error).message); }
+  };
 
   const setPrice = async (cents: number) => {
     try { await updateFamily(family.id, { price_cents: cents }); }
@@ -132,6 +166,40 @@ function FamilyEditor({
 
   return (
     <div className="border-t border-border p-3 space-y-3">
+      {/* Image picker */}
+      <div className="flex items-center gap-3">
+        <div className="w-16 h-16 rounded-md bg-muted overflow-hidden shrink-0">
+          {family.image && (
+            <img src={family.image} alt="" className="w-full h-full object-cover" />
+          )}
+        </div>
+        <div className="flex-1 flex flex-col gap-1">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingImg}
+            className="inline-flex items-center justify-center gap-1 text-xs rounded-md border border-border px-3 py-2 disabled:opacity-50"
+          >
+            <ImageIcon className="h-3 w-3" />
+            {uploadingImg ? "Compression…" : family.image ? "Changer l'image" : "Ajouter une image"}
+          </button>
+          {family.image && (
+            <button
+              onClick={clearImage}
+              className="inline-flex items-center justify-center gap-1 text-xs text-muted-foreground"
+            >
+              <X className="h-3 w-3" /> Retirer
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={onImageChosen}
+            className="hidden"
+          />
+        </div>
+      </div>
+
       <input
         defaultValue={family.name}
         onBlur={(e) => e.target.value !== family.name && setName(e.target.value)}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { ChevronLeft, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Lock } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import { deleteConcert, updateConcert } from "../lib/db";
@@ -56,13 +56,26 @@ export function ConcertsTab() {
           <button
             key={c.id}
             onClick={() => setOpenId(c.id)}
-            className="w-full bg-card border border-border rounded-lg p-3 flex items-center justify-between text-left"
+            className={`w-full border rounded-lg p-3 flex items-center justify-between text-left ${
+              c.is_closed ? "bg-muted/40 border-border/50 opacity-80" : "bg-card border-border"
+            }`}
           >
             <div className="min-w-0">
-              <div className="font-display text-base text-primary truncate">{c.name}</div>
+              <div className="flex items-center gap-2">
+                <div className="font-display text-base text-primary truncate">{c.name}</div>
+                {c.is_closed && (
+                  <span className="text-[9px] uppercase tracking-wider bg-muted text-muted-foreground px-1.5 py-0.5 rounded shrink-0">
+                    Clôturé
+                  </span>
+                )}
+                {c.is_active && !c.is_closed && (
+                  <span className="text-[9px] uppercase tracking-wider bg-primary/20 text-primary px-1.5 py-0.5 rounded shrink-0">
+                    Actif
+                  </span>
+                )}
+              </div>
               <div className="text-xs text-muted-foreground">
                 {new Date(c.concert_date).toLocaleDateString("fr-BE")}
-                {c.is_active ? " · actif" : ""}
               </div>
             </div>
             <div className="text-right">
@@ -98,6 +111,7 @@ function ConcertDetail({
   const [date, setDate] = useState(concert.concert_date);
   const [notes, setNotes] = useState(concert.notes ?? "");
   const [active, setActive] = useState(concert.is_active);
+  const closed = concert.is_closed === true;
 
   const mySales = useMemo(() => sales.filter((s) => s.concert_id === concert.id), [sales, concert.id]);
 
@@ -142,6 +156,26 @@ function ConcertDetail({
     }
   };
 
+  const close = async () => {
+    if (!confirm("Clôturer ce concert ? Il ne sera plus actif dans l'onglet Ventes, mais restera consultable.")) return;
+    try {
+      await updateConcert(concert.id, { is_active: false, is_closed: true });
+      setActive(false);
+      toast.success("Concert clôturé");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const reopen = async () => {
+    try {
+      await updateConcert(concert.id, { is_closed: false });
+      toast.success("Concert rouvert");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
   const remove = async () => {
     if (!confirm("Supprimer ce concert et toutes ses ventes ?")) return;
     try {
@@ -154,9 +188,16 @@ function ConcertDetail({
 
   return (
     <div className="px-4 pt-4 space-y-4">
-      <button onClick={onBack} aria-label="Retour" className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-        <ChevronLeft className="h-4 w-4" /> Retour
-      </button>
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} aria-label="Retour" className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+          <ChevronLeft className="h-4 w-4" /> Retour
+        </button>
+        {closed && (
+          <span className="text-[10px] uppercase tracking-wider bg-muted text-muted-foreground px-2 py-1 rounded">
+            Clôturé
+          </span>
+        )}
+      </div>
 
       <div className="space-y-2">
         <input
@@ -226,6 +267,22 @@ function ConcertDetail({
           <Trash2 className="h-5 w-5" />
         </button>
       </div>
+
+      {closed ? (
+        <button
+          onClick={reopen}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-border py-3 text-sm text-muted-foreground"
+        >
+          Rouvrir ce concert
+        </button>
+      ) : (
+        <button
+          onClick={close}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-border py-3 text-sm"
+        >
+          <Lock className="h-4 w-4" /> Clôturer ce concert
+        </button>
+      )}
     </div>
   );
 }

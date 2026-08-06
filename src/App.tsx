@@ -46,7 +46,7 @@ function Shell() {
             alt="Ardenne Heavy"
             className="h-8 w-auto object-contain shrink-0"
           />
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Merch counter</p>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Merchandising</p>
         </div>
         <button
           onClick={hardRefresh}

@@ -108,11 +108,18 @@ export function SalesTab() {
     );
   }
 
-  if (!concert && concerts.length === 0) {
+  if (!concert) {
+    const allClosed = concerts.length > 0;
     return (
       <div className="px-6 py-12 text-center space-y-4">
-        <h2 className="font-display text-2xl">Aucun concert</h2>
-        <p className="text-muted-foreground">Crée une fiche concert pour commencer à compter les ventes.</p>
+        <h2 className="font-display text-2xl">
+          {allClosed ? "Aucun concert ouvert" : "Aucun concert"}
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          {allClosed
+            ? "Tous tes concerts sont clôturés. Crée-en un nouveau pour compter des ventes, ou rouvre un ancien depuis l'onglet Concerts."
+            : "Crée une fiche concert pour commencer à compter les ventes."}
+        </p>
         <button
           onClick={() => setNewConcertOpen(true)}
           className="rounded-md bg-primary text-primary-foreground font-display tracking-wider px-6 py-3"
@@ -125,8 +132,6 @@ export function SalesTab() {
       </div>
     );
   }
-
-  if (!concert) return null;
 
   return (
     <div className="px-3 pt-3">

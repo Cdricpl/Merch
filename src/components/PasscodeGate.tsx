@@ -39,7 +39,7 @@ export function PasscodeGate({ children }: { children: React.ReactNode }) {
             alt="Ardenne Heavy"
             className="mx-auto h-20 w-auto object-contain"
           />
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Merch counter</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Merchandising</p>
         </div>
         <input
           type="password"

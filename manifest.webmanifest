@@ -1,31 +1,16 @@
 {
   "name": "Ardenne Heavy — Merch",
   "short_name": "AH Merch",
-  "description": "Compteur de merch pour Ardenne Heavy. Ventes en concert, stock et recettes.",
-  "theme_color": "#1a0f0a",
-  "background_color": "#0d0d0d",
+  "description": "Compteur de merch pour Ardenne Heavy.",
+  "theme_color": "#000000",
+  "background_color": "#000000",
   "display": "standalone",
   "orientation": "portrait",
   "start_url": ".",
   "scope": ".",
   "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

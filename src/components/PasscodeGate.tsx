@@ -2,7 +2,7 @@ import { useState } from "react";
 
 // ⚠️ Change ce mot de passe puis re-deploy pour le changer partout.
 // C'est un simple verrou d'entrée, pas une vraie protection cryptographique.
-const PASSCODE = "ardenne";
+const PASSCODE = "6600";
 
 const LS_KEY = "gate-ok-v1";
 
@@ -32,10 +32,14 @@ export function PasscodeGate({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-[100dvh] flex items-center justify-center px-6 bg-background">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-4">
-        <div className="text-center">
-          <h1 className="font-display text-3xl text-primary">Ardenne Heavy</h1>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mt-1">Merch counter</p>
+      <form onSubmit={submit} className="w-full max-w-sm space-y-6">
+        <div className="text-center space-y-2">
+          <img
+            src={import.meta.env.BASE_URL + "logo.png"}
+            alt="Ardenne Heavy"
+            className="mx-auto h-20 w-auto object-contain"
+          />
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Merch counter</p>
         </div>
         <input
           type="password"

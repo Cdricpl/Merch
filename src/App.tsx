@@ -40,9 +40,13 @@ function Shell() {
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background">
       <header className="px-4 pt-4 pb-3 border-b border-border sticky top-0 bg-background/95 backdrop-blur z-10 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-lg leading-none text-primary">Ardenne Heavy</h1>
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground mt-1">Merch counter</p>
+        <div className="flex items-center gap-3 min-w-0">
+          <img
+            src={import.meta.env.BASE_URL + "logo.png"}
+            alt="Ardenne Heavy"
+            className="h-8 w-auto object-contain shrink-0"
+          />
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Merch counter</p>
         </div>
         <button
           onClick={hardRefresh}

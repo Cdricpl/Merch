@@ -44,9 +44,10 @@ function Shell() {
         <button
           onClick={hardRefresh}
           aria-label="Vider le cache et recharger"
-          className="p-2 -mr-2 text-muted-foreground active:scale-90 transition text-[10px] font-mono"
+          title="Version — tape pour forcer le rechargement"
+          className="px-2 py-1 -mr-2 text-muted-foreground active:scale-90 transition text-[10px] font-mono border border-border rounded"
         >
-          v2
+          {__APP_VERSION__}
         </button>
       </header>
 

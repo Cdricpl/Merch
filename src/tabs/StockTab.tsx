@@ -1,19 +1,21 @@
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { Plus, Minus, Trash2, ChevronDown, ChevronRight, Image as ImageIcon, X } from "lucide-react";
+import {
+  Plus, Minus, Trash2, ChevronLeft, ChevronRight,
+  Image as ImageIcon, X, Package,
+} from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
+import { levelFor, levelText } from "../lib/stockLevel";
+import { parseName } from "../lib/category";
 import {
-  createFamily,
-  createVariant,
-  deleteFamily,
-  deleteVariant,
-  replenishVariant,
-  updateFamily,
-  updateVariant,
+  createFamily, createVariant, deleteFamily, deleteVariant,
+  replenishVariant, updateFamily, updateVariant,
 } from "../lib/db";
 import { fileToCompressedDataUrl } from "../lib/image";
+import { StockBadge } from "../components/StockBadge";
+import { VariantBar } from "../components/VariantBar";
 import type { Family, Variant } from "../lib/types";
 
 export function StockTab() {
@@ -21,65 +23,75 @@ export function StockTab() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
-  const grouped = useMemo(() => {
-    return families.map((f) => ({
-      family: f,
-      items: variants.filter((v) => v.family_id === f.id),
-    }));
-  }, [families, variants]);
+  if (openId) {
+    const f = families.find((x) => x.id === openId);
+    if (f) {
+      return (
+        <FamilyDetail
+          family={f}
+          variants={variants.filter((v) => v.family_id === f.id)}
+          saleIds={sales
+            .filter((s) => variants.some((v) => v.family_id === f.id && v.id === s.variant_id))
+            .map((s) => s.id)}
+          onBack={() => setOpenId(null)}
+          onDeleted={() => setOpenId(null)}
+        />
+      );
+    }
+  }
+
+  const grouped = families.map((f) => ({
+    family: f,
+    items: variants.filter((v) => v.family_id === f.id),
+  }));
 
   return (
-    <div className="px-4 pt-4 space-y-3">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground">Stock global</div>
+    <div className="px-4 pt-4 space-y-3 pb-4">
+      <div className="flex items-center justify-between">
+        <h1 className="font-display text-2xl">Stock</h1>
+        <button
+          onClick={() => setAddOpen(true)}
+          aria-label="Nouveau produit"
+          className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center active:scale-90 transition shadow-lg shadow-primary/30"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+      </div>
 
       <div className="space-y-2">
         {grouped.map(({ family, items }) => {
           const total = items.reduce((s, x) => s + x.stock, 0);
-          const isOpen = openId === family.id;
-          const lowStock = total <= family.low_alert;
+          const { category, display } = parseName(family.name);
           return (
-            <div key={family.id} className="bg-card border border-border rounded-lg">
-              <button
-                onClick={() => setOpenId(isOpen ? null : family.id)}
-                className="w-full flex items-center gap-2 p-3 text-left"
-              >
-                {isOpen ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+            <button
+              key={family.id}
+              onClick={() => setOpenId(family.id)}
+              className="w-full flex items-center gap-3 bg-card border border-border/60 rounded-xl p-3 text-left active:bg-card/70 transition"
+            >
+              <div className="w-12 h-12 rounded-md bg-muted overflow-hidden shrink-0">
+                {family.image && <img src={family.image} alt="" className="w-full h-full object-cover" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                {category && (
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{category}</div>
                 )}
-                <div className="w-10 h-10 rounded-md bg-muted overflow-hidden shrink-0">
-                  {family.image && (
-                    <img src={family.image} alt="" className="w-full h-full object-cover" />
-                  )}
+                <div className="font-semibold text-sm truncate">{display}</div>
+                <div className="text-[11px] text-muted-foreground">
+                  {formatEUR(family.price_cents)} · {items.length} taille{items.length > 1 ? "s" : ""}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold truncate">{family.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatEUR(family.price_cents)} · {items.length} variante{items.length > 1 ? "s" : ""}
-                  </div>
-                </div>
-                <div className={`font-display text-2xl ${lowStock ? "text-destructive" : ""}`}>{total}</div>
-              </button>
-
-              {isOpen && (
-                <FamilyEditor
-                  family={family}
-                  variants={items}
-                  saleIds={sales.filter((s) => items.some((v) => v.id === s.variant_id)).map((s) => s.id)}
-                />
-              )}
-            </div>
+              </div>
+              <StockBadge stock={total} alert={family.low_alert} />
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+            </button>
           );
         })}
-      </div>
 
-      <button
-        onClick={() => setAddOpen(true)}
-        className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-3 text-muted-foreground"
-      >
-        <Plus className="h-4 w-4" /> Nouvelle famille de produit
-      </button>
+        {grouped.length === 0 && (
+          <p className="text-center text-muted-foreground py-12 text-sm">
+            Aucun produit. Tape sur le <Plus className="inline h-3 w-3" /> en haut pour en créer.
+          </p>
+        )}
+      </div>
 
       {addOpen &&
         createPortal(<AddFamilyModal onClose={() => setAddOpen(false)} />, document.body)}
@@ -87,39 +99,42 @@ export function StockTab() {
   );
 }
 
-function FamilyEditor({
-  family,
-  variants,
-  saleIds,
+function FamilyDetail({
+  family, variants, saleIds, onBack, onDeleted,
 }: {
   family: Family;
   variants: Variant[];
   saleIds: string[];
+  onBack: () => void;
+  onDeleted: () => void;
 }) {
   const [replenishFor, setReplenishFor] = useState<Variant | null>(null);
   const [addVariantOpen, setAddVariantOpen] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const total = variants.reduce((s, x) => s + x.stock, 0);
+  const maxStock = variants.reduce((m, x) => Math.max(m, x.stock), 0);
+  const { category, display } = parseName(family.name);
+  const level = levelFor(total, family.low_alert);
 
   const onImageChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    e.target.value = ""; // reset so re-picking the same file re-fires
+    e.target.value = "";
     if (!file) return;
     setUploadingImg(true);
     try {
       const dataUrl = await fileToCompressedDataUrl(file);
-      // Firestore doc limit ~1 MB. base64 * 4/3 → cap around 700 kB source
       if (dataUrl.length > 900_000) {
-        toast.error("Image trop lourde après compression, essaie une autre.");
+        toast.error("Image trop lourde après compression");
       } else {
         await updateFamily(family.id, { image: dataUrl });
         toast.success("Image mise à jour");
       }
     } catch (err) {
       toast.error((err as Error).message);
-    } finally {
-      setUploadingImg(false);
-    }
+    } finally { setUploadingImg(false); }
   };
 
   const clearImage = async () => {
@@ -144,159 +159,195 @@ function FamilyEditor({
   };
 
   const removeFamily = async () => {
-    if (!confirm(`Supprimer "${family.name}" et toutes ses variantes ?`)) return;
+    if (!confirm(`Supprimer "${family.name}" ?`)) return;
     try {
       await deleteFamily(family.id, variants.map((v) => v.id), saleIds);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
+      onDeleted();
+    } catch (e) { toast.error((e as Error).message); }
   };
 
-  const setStock = async (variant: Variant, stock: number) => {
-    const safe = Math.max(0, Math.floor(stock));
-    try { await updateVariant(variant.id, { stock: safe }); }
+  const bumpStock = async (v: Variant, delta: number) => {
+    const next = Math.max(0, v.stock + delta);
+    try { await updateVariant(v.id, { stock: next }); }
     catch (e) { toast.error((e as Error).message); }
   };
 
-  const removeVariant = async (variant: Variant) => {
-    if (!confirm(`Supprimer la taille ${variant.label ?? "—"} ?`)) return;
-    try { await deleteVariant(variant.id); }
+  const removeVariant = async (v: Variant) => {
+    if (!confirm(`Supprimer la taille ${v.label ?? "—"} ?`)) return;
+    try { await deleteVariant(v.id); }
     catch (e) { toast.error((e as Error).message); }
   };
 
   return (
-    <div className="border-t border-border p-3 space-y-3">
-      {/* Image picker */}
-      <div className="flex items-center gap-3">
-        <div className="w-16 h-16 rounded-md bg-muted overflow-hidden shrink-0">
-          {family.image && (
+    <div className="px-4 pt-4 pb-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} aria-label="Retour" className="inline-flex items-center gap-1 text-sm text-muted-foreground -ml-1">
+          <ChevronLeft className="h-5 w-5" /> Stock
+        </button>
+        <button
+          onClick={() => setEditMode((v) => !v)}
+          className="text-xs text-primary uppercase tracking-wider font-semibold"
+        >
+          {editMode ? "OK" : "Modifier"}
+        </button>
+      </div>
+
+      {/* Hero */}
+      <div className="flex items-center gap-4">
+        <div className="w-24 h-24 rounded-2xl bg-muted overflow-hidden shrink-0 border border-border/60">
+          {family.image ? (
             <img src={family.image} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+              <Package className="h-8 w-8" />
+            </div>
           )}
         </div>
-        <div className="flex-1 flex flex-col gap-1">
+        <div className="flex-1 min-w-0">
+          {category && (
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{category}</div>
+          )}
+          <div className="font-display text-xl leading-tight">{display}</div>
+          <div className="text-primary font-display text-lg mt-1">{formatEUR(family.price_cents)}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Total</div>
+          <div className={`font-display text-4xl leading-none ${levelText(level)}`}>{total}</div>
+        </div>
+      </div>
+
+      <div className="text-[11px] text-muted-foreground -mt-2">
+        Alerte à <span className={`${levelText(level)} font-semibold`}>{family.low_alert}</span>
+      </div>
+
+      {/* Image editor (only in edit mode) */}
+      {editMode && (
+        <div className="flex items-center gap-3">
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageChosen} className="hidden" />
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadingImg}
-            className="inline-flex items-center justify-center gap-1 text-xs rounded-md border border-border px-3 py-2 disabled:opacity-50"
+            className="flex-1 inline-flex items-center justify-center gap-2 text-xs rounded-md border border-border px-3 py-2 disabled:opacity-50"
           >
             <ImageIcon className="h-3 w-3" />
             {uploadingImg ? "Compression…" : family.image ? "Changer l'image" : "Ajouter une image"}
           </button>
           {family.image && (
-            <button
-              onClick={clearImage}
-              className="inline-flex items-center justify-center gap-1 text-xs text-muted-foreground"
-            >
+            <button onClick={clearImage} className="text-xs text-destructive inline-flex items-center gap-1">
               <X className="h-3 w-3" /> Retirer
             </button>
           )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={onImageChosen}
-            className="hidden"
-          />
         </div>
-      </div>
+      )}
 
-      <input
-        defaultValue={family.name}
-        onBlur={(e) => e.target.value !== family.name && setName(e.target.value)}
-        className="w-full rounded-md bg-input border border-border px-3 py-2"
-      />
-      <div className="grid grid-cols-2 gap-2">
-        <label className="rounded-md bg-muted px-2 py-2 block">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Prix (€)</div>
+      {/* Edit fields */}
+      {editMode && (
+        <div className="space-y-2">
           <input
-            type="number"
-            step="0.5"
-            defaultValue={(family.price_cents / 100).toString()}
-            onBlur={(e) => {
-              const cents = Math.round(parseFloat(e.target.value || "0") * 100);
-              if (cents !== family.price_cents) setPrice(cents);
-            }}
-            className="w-full bg-transparent text-lg font-display outline-none"
+            defaultValue={family.name}
+            onBlur={(e) => e.target.value !== family.name && setName(e.target.value)}
+            className="w-full rounded-xl bg-input border border-border px-3 py-3"
           />
-        </label>
-        <label className="rounded-md bg-muted px-2 py-2 block">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Alerte à</div>
-          <input
-            type="number"
-            min={0}
-            defaultValue={family.low_alert.toString()}
-            onBlur={(e) => {
-              const n = parseInt(e.target.value || "0");
-              if (n !== family.low_alert) setLowAlert(n);
-            }}
-            className="w-full bg-transparent text-lg font-display outline-none"
-          />
-        </label>
-      </div>
-
-      <div className="space-y-1">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Variantes</div>
-        {variants.map((v) => {
-          const low = v.stock <= family.low_alert;
-          return (
-            <div key={v.id} className="flex items-center gap-2 bg-muted rounded-lg px-2 py-2">
-              <div className="w-14 font-display text-lg">{v.label ?? "—"}</div>
-              <button
-                onClick={() => setStock(v, v.stock - 1)}
-                disabled={v.stock <= 0}
-                aria-label="Retirer 1"
-                className="w-9 h-9 rounded-md border border-border flex items-center justify-center active:scale-90 disabled:opacity-30"
-              >
-                <Minus className="h-4 w-4" />
-              </button>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="rounded-xl bg-muted px-3 py-2 block">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Prix (€)</div>
               <input
-                type="number"
-                min={0}
-                value={v.stock}
-                onChange={(e) => setStock(v, parseInt(e.target.value || "0"))}
-                className={`flex-1 min-w-0 bg-transparent text-center text-2xl font-display outline-none ${
-                  low ? "text-destructive" : ""
-                }`}
+                type="number" step="0.5"
+                defaultValue={(family.price_cents / 100).toString()}
+                onBlur={(e) => {
+                  const cents = Math.round(parseFloat(e.target.value || "0") * 100);
+                  if (cents !== family.price_cents) setPrice(cents);
+                }}
+                className="w-full bg-transparent text-lg font-display outline-none"
               />
-              <button
-                onClick={() => setStock(v, v.stock + 1)}
-                aria-label="Ajouter 1"
-                className="w-9 h-9 rounded-md border border-border flex items-center justify-center active:scale-90"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setReplenishFor(v)}
-                aria-label="Réapprovisionner"
-                className="px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm font-semibold active:scale-90"
-              >
-                +N
-              </button>
-              <button
-                onClick={() => removeVariant(v)}
-                aria-label="Supprimer la variante"
-                className="p-2 text-muted-foreground"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+            </label>
+            <label className="rounded-xl bg-muted px-3 py-2 block">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Alerte à</div>
+              <input
+                type="number" min={0}
+                defaultValue={family.low_alert.toString()}
+                onBlur={(e) => {
+                  const n = parseInt(e.target.value || "0");
+                  if (n !== family.low_alert) setLowAlert(n);
+                }}
+                className="w-full bg-transparent text-lg font-display outline-none"
+              />
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* Variants */}
+      <div className="space-y-2">
+        <div className="text-xs uppercase tracking-widest text-muted-foreground font-semibold px-1">Par taille</div>
+        <div className="bg-card border border-border/60 rounded-xl divide-y divide-border/40">
+          {variants.map((v) => (
+            <div key={v.id} className="flex items-center gap-2 px-2 py-1">
+              <div className="flex-1">
+                <VariantBar variant={v} alert={family.low_alert} maxStock={Math.max(1, maxStock)} />
+              </div>
+              {editMode && (
+                <div className="flex items-center gap-1 pr-1">
+                  <button
+                    onClick={() => bumpStock(v, -1)}
+                    disabled={v.stock <= 0}
+                    aria-label="Retirer 1"
+                    className="w-8 h-8 rounded-md border border-border flex items-center justify-center active:scale-90 disabled:opacity-30"
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => bumpStock(v, 1)}
+                    aria-label="Ajouter 1"
+                    className="w-8 h-8 rounded-md border border-border flex items-center justify-center active:scale-90"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => setReplenishFor(v)}
+                    aria-label="Réapprovisionner"
+                    className="px-2 h-8 rounded-md bg-primary text-primary-foreground text-xs font-semibold active:scale-90"
+                  >
+                    +N
+                  </button>
+                  <button
+                    onClick={() => removeVariant(v)}
+                    aria-label="Supprimer la taille"
+                    className="w-8 h-8 flex items-center justify-center text-muted-foreground"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {!editMode && (
+                <button
+                  onClick={() => setReplenishFor(v)}
+                  className="px-3 h-8 rounded-md bg-primary/15 text-primary text-xs font-semibold active:scale-90 mr-1"
+                >
+                  +N
+                </button>
+              )}
             </div>
-          );
-        })}
-        <button
-          onClick={() => setAddVariantOpen(true)}
-          className="w-full text-sm text-muted-foreground py-2 rounded-md border border-dashed border-border"
-        >
-          <Plus className="h-3 w-3 inline mr-1" />
-          Ajouter une taille
-        </button>
+          ))}
+        </div>
+        {editMode && (
+          <button
+            onClick={() => setAddVariantOpen(true)}
+            className="w-full text-sm text-muted-foreground py-2 rounded-md border border-dashed border-border inline-flex items-center justify-center gap-1"
+          >
+            <Plus className="h-3 w-3" /> Ajouter une taille
+          </button>
+        )}
       </div>
 
-      <button
-        onClick={removeFamily}
-        className="w-full inline-flex items-center justify-center gap-2 text-sm text-destructive py-2"
-      >
-        <Trash2 className="h-4 w-4" /> Supprimer ce produit
-      </button>
+      {editMode && (
+        <button
+          onClick={removeFamily}
+          className="w-full inline-flex items-center justify-center gap-2 text-sm text-destructive py-2 rounded-xl border border-border"
+        >
+          <Trash2 className="h-4 w-4" /> Supprimer ce produit
+        </button>
+      )}
 
       {replenishFor &&
         createPortal(
@@ -321,9 +372,7 @@ function FamilyEditor({
 }
 
 function ReplenishModal({
-  variant,
-  familyName,
-  onClose,
+  variant, familyName, onClose,
 }: {
   variant: Variant;
   familyName: string;
@@ -342,41 +391,38 @@ function ReplenishModal({
       onClose();
     } catch (e) {
       toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full bg-card border-t border-border rounded-t-2xl p-5 space-y-4"
+        className="w-full bg-card border-t border-border rounded-t-3xl p-5 space-y-4"
         onClick={(e) => e.stopPropagation()}
         style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
       >
+        <div className="w-10 h-1 rounded-full bg-muted mx-auto" />
         <div>
           <h2 className="font-display text-xl">Réapprovisionner</h2>
           <p className="text-sm text-muted-foreground">
-            {familyName} — {variant.label ?? "—"} (stock actuel : {variant.stock})
+            {familyName} — {variant.label ?? "—"} · stock actuel : <span className="font-semibold text-foreground">{variant.stock}</span>
           </p>
         </div>
         <div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Quantité à ajouter</div>
           <input
-            type="number"
-            min={1}
-            value={n}
+            type="number" min={1} value={n}
             onChange={(e) => setN(e.target.value)}
-            className="w-full rounded-md bg-input border border-border px-3 py-3 text-2xl font-display"
+            className="w-full rounded-xl bg-input border border-border px-3 py-3 text-2xl font-display"
             autoFocus
           />
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {[5, 10, 20, 50].map((v) => (
             <button
               key={v}
               onClick={() => setN(String(v))}
-              className="flex-1 rounded-md bg-muted py-2 text-sm font-semibold"
+              className={`rounded-md py-2 text-sm font-semibold ${n === String(v) ? "bg-primary text-primary-foreground" : "bg-muted"}`}
             >
               +{v}
             </button>
@@ -385,7 +431,7 @@ function ReplenishModal({
         <button
           onClick={submit}
           disabled={busy}
-          className="w-full rounded-md bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
+          className="w-full rounded-xl bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
         >
           {busy ? "…" : `Ajouter ${n} au stock`}
         </button>
@@ -407,44 +453,41 @@ function AddFamilyModal({ onClose }: { onClose: () => void }) {
       onClose();
     } catch (e) {
       toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full bg-card border-t border-border rounded-t-2xl p-5 space-y-3"
+        className="w-full bg-card border-t border-border rounded-t-3xl p-5 space-y-3"
         onClick={(e) => e.stopPropagation()}
         style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
       >
+        <div className="w-10 h-1 rounded-full bg-muted mx-auto" />
         <h2 className="font-display text-xl">Nouveau produit</h2>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Nom (ex : T-shirt Nouveau modèle)"
-          className="w-full rounded-md bg-input border border-border px-3 py-3"
+          className="w-full rounded-xl bg-input border border-border px-3 py-3"
         />
         <label className="block">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Prix (€)</div>
           <input
-            type="number"
-            step="0.5"
-            value={price}
+            type="number" step="0.5" value={price}
             onChange={(e) => setPrice(e.target.value)}
-            className="w-full rounded-md bg-input border border-border px-3 py-3"
+            className="w-full rounded-xl bg-input border border-border px-3 py-3"
           />
         </label>
         <button
           onClick={create}
           disabled={busy || !name.trim()}
-          className="w-full rounded-md bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
+          className="w-full rounded-xl bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
         >
           {busy ? "…" : "Créer"}
         </button>
         <p className="text-[11px] text-muted-foreground">
-          Une variante par défaut sera créée. Ajoute les tailles dans le détail du produit.
+          Une variante par défaut est créée. Ajoute les tailles dans le détail du produit.
         </p>
       </div>
     </div>
@@ -452,8 +495,7 @@ function AddFamilyModal({ onClose }: { onClose: () => void }) {
 }
 
 function AddVariantModal({
-  familyId,
-  onClose,
+  familyId, onClose,
 }: {
   familyId: string;
   onClose: () => void;
@@ -469,40 +511,37 @@ function AddVariantModal({
       onClose();
     } catch (e) {
       toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full bg-card border-t border-border rounded-t-2xl p-5 space-y-3"
+        className="w-full bg-card border-t border-border rounded-t-3xl p-5 space-y-3"
         onClick={(e) => e.stopPropagation()}
         style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
       >
+        <div className="w-10 h-1 rounded-full bg-muted mx-auto" />
         <h2 className="font-display text-xl">Nouvelle taille</h2>
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Ex : XL, 2XL, ou vide"
-          className="w-full rounded-md bg-input border border-border px-3 py-3"
+          className="w-full rounded-xl bg-input border border-border px-3 py-3"
           autoFocus
         />
         <label className="block">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Stock initial</div>
           <input
-            type="number"
-            min={0}
-            value={stock}
+            type="number" min={0} value={stock}
             onChange={(e) => setStock(e.target.value)}
-            className="w-full rounded-md bg-input border border-border px-3 py-3"
+            className="w-full rounded-xl bg-input border border-border px-3 py-3"
           />
         </label>
         <button
           onClick={create}
           disabled={busy}
-          className="w-full rounded-md bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
+          className="w-full rounded-xl bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
         >
           {busy ? "…" : "Ajouter"}
         </button>

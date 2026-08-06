@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { Plus, X, Calendar, Sparkles } from "lucide-react";
+import { Plus, X, Calendar } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
+import { levelFor } from "../lib/stockLevel";
 import { recordSale, undoSale, seedInitialStock } from "../lib/db";
 import type { Family, Variant, Concert, Sale } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
+import { CaisseCard } from "../components/CaisseCard";
+import { ProductCard } from "../components/ProductCard";
 
 export function SalesTab() {
   const { families, variants, concerts, sales, loading } = useStore();
@@ -44,32 +47,31 @@ export function SalesTab() {
     });
   }, [families, variants, salesThisConcert]);
 
+  const lowStockCount = useMemo(
+    () => grouped.filter(({ family, stock }) => levelFor(stock, family.low_alert) === "critical").length,
+    [grouped]
+  );
+
   const doAddSale = async (family: Family, variant: Variant) => {
     if (!concert) return;
-    if (concert.is_closed) {
-      toast.error("Concert clôturé — impossible d'ajouter des ventes");
-      return;
-    }
+    if (concert.is_closed) { toast.error("Concert clôturé"); return; }
     if (navigator.vibrate) navigator.vibrate(20);
     try {
       await recordSale({ concertId: concert.id, variantId: variant.id, priceCents: family.price_cents });
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
+    } catch (e) { toast.error((e as Error).message); }
   };
 
-  const doRemoveLastSale = async (variant: Variant) => {
+  const doRemoveLastSale = async (family: Family, variant?: Variant) => {
     if (!concert) return;
-    const last = [...salesThisConcert]
-      .filter((s) => s.variant_id === variant.id)
-      .sort((a, b) => (a.created_at > b.created_at ? -1 : 1))[0];
+    // If a specific variant is given, undo that. Otherwise pick the most recent sale of ANY variant in the family.
+    const familyVariantIds = variants.filter((v) => v.family_id === family.id).map((v) => v.id);
+    const candidates = salesThisConcert
+      .filter((s) => (variant ? s.variant_id === variant.id : familyVariantIds.includes(s.variant_id)))
+      .sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
+    const last = candidates[0];
     if (!last) return;
     if (navigator.vibrate) navigator.vibrate(50);
-    try {
-      await undoSale(last.id);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
+    try { await undoSale(last.id); } catch (e) { toast.error((e as Error).message); }
   };
 
   const doSeed = async () => {
@@ -93,15 +95,13 @@ export function SalesTab() {
       <div className="px-6 py-12 text-center space-y-4">
         <h2 className="font-display text-2xl">Aucun produit</h2>
         <p className="text-muted-foreground text-sm">
-          Charge ton stock initial (les données de la note du 25/05/2026)
-          ou ajoute manuellement dans l'onglet Stock.
+          Charge ton stock initial ou ajoute manuellement dans l'onglet Stock.
         </p>
         <button
           onClick={doSeed}
           disabled={seeding}
-          className="inline-flex items-center gap-2 rounded-md bg-primary text-primary-foreground font-display tracking-wider px-6 py-3 disabled:opacity-50"
+          className="rounded-md bg-primary text-primary-foreground font-display tracking-wider px-6 py-3 disabled:opacity-50"
         >
-          <Sparkles className="h-4 w-4" />
           {seeding ? "…" : "Charger le stock initial"}
         </button>
       </div>
@@ -117,7 +117,7 @@ export function SalesTab() {
         </h2>
         <p className="text-muted-foreground text-sm">
           {allClosed
-            ? "Tous tes concerts sont clôturés. Crée-en un nouveau pour compter des ventes, ou rouvre un ancien depuis l'onglet Concerts."
+            ? "Tous tes concerts sont clôturés. Crée-en un nouveau, ou rouvre un ancien depuis l'onglet Concerts."
             : "Crée une fiche concert pour commencer à compter les ventes."}
         </p>
         <button
@@ -134,68 +134,38 @@ export function SalesTab() {
   }
 
   return (
-    <div className="px-3 pt-3">
-      <button
-        onClick={() => setConcertPicker(true)}
-        className="w-full bg-card border border-border rounded-lg p-3 flex items-center justify-between mb-3"
-      >
-        <div className="text-left">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Concert actif</div>
-          <div className="font-display text-base text-primary">{concert.name}</div>
-          <div className="text-xs text-muted-foreground">{new Date(concert.concert_date).toLocaleDateString("fr-BE")}</div>
-        </div>
-        <div className="text-right">
-          <div className="font-display text-2xl">{formatEUR(totalCents)}</div>
-          <div className="text-xs text-muted-foreground">
-            {totalItems} vendu{totalItems > 1 ? "s" : ""}
-          </div>
-        </div>
-      </button>
+    <div className="px-3 pt-3 space-y-4">
+      <CaisseCard
+        concert={concert}
+        totalCents={totalCents}
+        totalItems={totalItems}
+        lowStockCount={lowStockCount}
+        onTapConcert={() => setConcertPicker(true)}
+      />
+
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Produits</h2>
+        <button
+          onClick={() => toast.info("Va dans l'onglet Stock pour ajouter un produit.")}
+          className="text-xs text-primary inline-flex items-center gap-1"
+        >
+          <Plus className="h-3 w-3" /> Ajouter
+        </button>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {grouped.map(({ family, items, stock, sold }) => {
-          const single = items.length === 1 && !items[0].label;
-          const lowStock = stock <= family.low_alert;
-          return (
-            <button
-              key={family.id}
-              onClick={() => {
-                if (single) doAddSale(family, items[0]);
-                else setPickerFamily(family);
-              }}
-              disabled={stock === 0}
-              className="tap-btn w-full aspect-square p-2 flex flex-col disabled:opacity-40"
-            >
-              <div className="flex items-start justify-between w-full">
-                <div className="w-9 h-9 rounded-md bg-muted overflow-hidden flex items-center justify-center shrink-0">
-                  {family.image ? (
-                    <img src={family.image} alt="" className="w-full h-full object-cover" />
-                  ) : null}
-                </div>
-                <div className="flex flex-col items-end gap-0.5">
-                  <span className={`text-xs font-bold leading-none ${lowStock ? "text-destructive" : "text-muted-foreground"}`}>
-                    {stock}
-                  </span>
-                  {items.length > 1 && (
-                    <span className="text-[9px] text-muted-foreground leading-none">
-                      {items.length} tailles
-                    </span>
-                  )}
-                  {single && <Plus className="h-3 w-3 text-muted-foreground" />}
-                </div>
-              </div>
-              <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center px-1">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight line-clamp-2">
-                  {family.name}
-                </div>
-                <div className="font-display text-4xl text-primary leading-none mt-1">{sold}</div>
-              </div>
-              <div className="text-[10px] text-muted-foreground text-center w-full">
-                {formatEUR(family.price_cents)}
-              </div>
-            </button>
-          );
-        })}
+        {grouped.map(({ family, items, stock, sold }) => (
+          <ProductCard
+            key={family.id}
+            family={family}
+            variants={items}
+            stock={stock}
+            sold={sold}
+            onAdd={() => doAddSale(family, items[0])}
+            onRemove={() => doRemoveLastSale(family)}
+            onOpenPicker={() => setPickerFamily(family)}
+          />
+        ))}
       </div>
 
       {pickerFamily &&
@@ -205,7 +175,7 @@ export function SalesTab() {
             variants={variants.filter((v) => v.family_id === pickerFamily.id)}
             sales={salesThisConcert}
             onAdd={(v) => doAddSale(pickerFamily, v)}
-            onRemove={(v) => doRemoveLastSale(v)}
+            onRemove={(v) => doRemoveLastSale(pickerFamily, v)}
             onClose={() => setPickerFamily(null)}
           />,
           document.body
@@ -216,14 +186,8 @@ export function SalesTab() {
           <ConcertPickerModal
             concerts={concerts}
             currentId={concert.id}
-            onPick={(id) => {
-              setActiveConcertId(id);
-              setConcertPicker(false);
-            }}
-            onNew={() => {
-              setConcertPicker(false);
-              setNewConcertOpen(true);
-            }}
+            onPick={(id) => { setActiveConcertId(id); setConcertPicker(false); }}
+            onNew={() => { setConcertPicker(false); setNewConcertOpen(true); }}
             onClose={() => setConcertPicker(false)}
           />,
           document.body
@@ -237,12 +201,7 @@ export function SalesTab() {
 }
 
 function VariantPickerModal({
-  family,
-  variants,
-  sales,
-  onAdd,
-  onRemove,
-  onClose,
+  family, variants, sales, onAdd, onRemove, onClose,
 }: {
   family: Family;
   variants: Variant[];
@@ -255,16 +214,22 @@ function VariantPickerModal({
     sales.filter((s) => s.variant_id === id).reduce((s, x) => s + x.quantity, 0);
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full bg-card border-t border-border rounded-t-2xl p-4 max-h-[80vh] overflow-y-auto"
+        className="w-full bg-card border-t border-border rounded-t-3xl p-4 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <h2 className="font-display text-xl text-primary">{family.name}</h2>
-            <p className="text-xs text-muted-foreground">{formatEUR(family.price_cents)} pièce</p>
+        <div className="w-10 h-1 rounded-full bg-muted mx-auto mb-3" />
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-xl bg-muted overflow-hidden shrink-0">
+              {family.image && <img src={family.image} alt="" className="w-full h-full object-cover" />}
+            </div>
+            <div>
+              <h2 className="font-display text-lg text-primary leading-tight">{family.name}</h2>
+              <p className="text-xs text-muted-foreground">{formatEUR(family.price_cents)} pièce</p>
+            </div>
           </div>
           <button onClick={onClose} aria-label="Fermer" className="p-2 -mr-2 text-muted-foreground">
             <X className="h-5 w-5" />
@@ -275,7 +240,7 @@ function VariantPickerModal({
             const count = countFor(v.id);
             const lowStock = v.stock <= family.low_alert;
             return (
-              <li key={v.id} className="flex items-center gap-3 bg-muted rounded-lg p-2">
+              <li key={v.id} className="flex items-center gap-3 bg-muted/50 rounded-xl p-2.5">
                 <div className="flex-1 min-w-0">
                   <div className="font-display text-2xl">{v.label ?? "—"}</div>
                   <div className="text-[11px] text-muted-foreground">
@@ -286,7 +251,6 @@ function VariantPickerModal({
                 <button
                   onClick={() => onRemove(v)}
                   disabled={count === 0}
-                  aria-label={`Annuler une vente ${v.label ?? ""}`}
                   className="w-11 h-11 rounded-full border border-border flex items-center justify-center active:scale-90 transition disabled:opacity-30"
                 >
                   <span className="text-xl leading-none">−</span>
@@ -294,7 +258,6 @@ function VariantPickerModal({
                 <button
                   onClick={() => onAdd(v)}
                   disabled={v.stock <= 0}
-                  aria-label={`Vendre 1 ${v.label ?? ""}`}
                   className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center active:scale-90 transition disabled:opacity-30"
                 >
                   <Plus className="h-5 w-5" />
@@ -309,11 +272,7 @@ function VariantPickerModal({
 }
 
 function ConcertPickerModal({
-  concerts,
-  currentId,
-  onPick,
-  onNew,
-  onClose,
+  concerts, currentId, onPick, onNew, onClose,
 }: {
   concerts: Concert[];
   currentId: string;
@@ -322,28 +281,28 @@ function ConcertPickerModal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full bg-card border-t border-border rounded-t-2xl p-4 max-h-[80vh] overflow-y-auto"
+        className="w-full bg-card border-t border-border rounded-t-3xl p-4 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
+        <div className="w-10 h-1 rounded-full bg-muted mx-auto mb-3" />
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-display text-xl">Choisir un concert</h2>
-          <button
-            onClick={onNew}
-            className="inline-flex items-center gap-1 text-sm bg-primary text-primary-foreground px-3 py-2 rounded-md"
-          >
+          <button onClick={onNew} className="inline-flex items-center gap-1 text-sm bg-primary text-primary-foreground px-3 py-2 rounded-md">
             <Calendar className="h-4 w-4" /> Nouveau
           </button>
         </div>
-        <ul className="space-y-1">
+        <ul className="space-y-2">
           {concerts.map((c) => (
             <li key={c.id}>
               <button
                 onClick={() => onPick(c.id)}
-                className={`w-full text-left px-3 py-3 rounded-md ${
-                  c.id === currentId ? "bg-primary text-primary-foreground" : "bg-muted"
+                className={`w-full text-left px-3 py-3 rounded-xl border ${
+                  c.id === currentId
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted/50 border-border"
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -353,10 +312,14 @@ function ConcertPickerModal({
                       Clôturé
                     </span>
                   )}
+                  {c.is_active && !c.is_closed && c.id !== currentId && (
+                    <span className="text-[9px] uppercase tracking-wider bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                      Actif
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs opacity-80">
-                  {new Date(c.concert_date).toLocaleDateString("fr-BE")}
-                  {c.is_active && !c.is_closed ? " · actif" : ""}
+                  {new Date(c.concert_date).toLocaleDateString("fr-BE", { day: "2-digit", month: "long", year: "numeric" })}
                 </div>
               </button>
             </li>
@@ -366,3 +329,4 @@ function ConcertPickerModal({
     </div>
   );
 }
+

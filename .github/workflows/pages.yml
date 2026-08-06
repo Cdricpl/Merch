@@ -24,8 +24,7 @@ jobs:
       - name: Build SPA for GitHub Pages
         run: npm run build:pages
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_FIREBASE_CONFIG: ${{ secrets.VITE_FIREBASE_CONFIG }}
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4

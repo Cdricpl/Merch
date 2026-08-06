@@ -4,19 +4,15 @@ import tailwindcss from "@tailwindcss/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { resolve } from "path";
 
-const buildId = new Intl.DateTimeFormat("fr-BE", {
-  timeZone: "Europe/Brussels",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-}).format(new Date());
+// Numéro de version affiché dans le header (petit badge en haut à droite).
+// Bump manuellement ici à chaque changement notable.
+const APP_VERSION = "v1.0";
 
 export default defineConfig({
   base: "/Merch/",
   plugins: [viteReact(), tailwindcss(), tsconfigPaths()],
   define: {
-    __APP_VERSION__: JSON.stringify(buildId),
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
   build: {
     outDir: "dist-pages",

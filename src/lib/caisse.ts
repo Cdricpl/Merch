@@ -48,8 +48,6 @@ export type CaisseState = {
    * argent est passé, et l'inventer ferait mentir le total.
    */
   unknownSales: number;
-  /** Recette du concert : ventes + cachet, quel que soit le mode. */
-  revenue: number;
 };
 
 const EMPTY_DEBT = (payee: string): PayeeDebt => ({
@@ -71,7 +69,6 @@ export function caisseFor(
 ): CaisseState {
   let cashSales = 0;
   let unknownSales = 0;
-  let salesTotal = 0;
 
   const byPayee = new Map<string, PayeeDebt>();
   const debtFor = (payee: string) => {
@@ -82,7 +79,6 @@ export function caisseFor(
 
   for (const s of sales) {
     const cents = saleTotalCents(s);
-    salesTotal += cents;
     if (s.payment_method === "cash") {
       cashSales += cents;
     } else if (s.payment_method === "qr") {
@@ -141,7 +137,6 @@ export function caisseFor(
     owed,
     debts,
     unknownSales,
-    revenue: salesTotal + fee,
   };
 }
 
@@ -158,7 +153,7 @@ export function caisseTotal(
   const merged = new Map<string, PayeeDebt>();
   const out: CaisseState = {
     cashSales: 0, feeCash: 0, settled: 0, expenses: looseExpenses, adjust,
-    inBox: adjust - looseExpenses, owed: 0, debts: [], unknownSales: 0, revenue: 0,
+    inBox: adjust - looseExpenses, owed: 0, debts: [], unknownSales: 0,
   };
 
   for (const s of states) {
@@ -169,7 +164,6 @@ export function caisseTotal(
     out.inBox += s.inBox;
     out.owed += s.owed;
     out.unknownSales += s.unknownSales;
-    out.revenue += s.revenue;
     for (const d of s.debts) {
       const m = merged.get(d.payee) ?? EMPTY_DEBT(d.payee);
       m.collected += d.collected;

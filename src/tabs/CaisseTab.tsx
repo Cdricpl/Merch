@@ -101,8 +101,6 @@ export function CaisseTab() {
 
       <ExpenseList expenses={expenses} concerts={concerts} />
 
-      <ConcertBreakdown rows={perConcert} />
-
       {countOpen &&
         createPortal(
           <CountSheet
@@ -210,7 +208,7 @@ function MemberDebts({
   );
 }
 
-/** Ce qui sort de la caisse : essence, repas, achat de matériel… */
+/** Ce qui sort de la caisse : achat de matériel, studio, essence, repas… */
 function ExpenseList({ expenses, concerts }: { expenses: Expense[]; concerts: Concert[] }) {
   const [label, setLabel] = useState("");
   const [amount, setAmount] = useState("");
@@ -278,7 +276,7 @@ function ExpenseList({ expenses, concerts }: { expenses: Expense[]; concerts: Co
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Essence, repas…"
+          placeholder="Achat matériel, studio…"
           className="flex-1 min-w-0 rounded-xl bg-input border border-border px-3 py-2.5 text-sm"
         />
         <input
@@ -296,49 +294,6 @@ function ExpenseList({ expenses, concerts }: { expenses: Expense[]; concerts: Co
         >
           <Plus className="h-5 w-5" />
         </button>
-      </div>
-    </div>
-  );
-}
-
-function ConcertBreakdown({
-  rows,
-}: {
-  rows: Array<{ concert: Concert; state: CaisseState }>;
-}) {
-  // Un concert sans le moindre mouvement d'argent n'apprend rien ici.
-  const visible = rows.filter(
-    (r) => r.state.revenue !== 0 || r.state.expenses !== 0 || r.state.inBox !== 0
-  );
-  if (visible.length === 0) return null;
-
-  return (
-    <div className="space-y-2">
-      <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-        Soirée par soirée
-      </div>
-      <div className="card-surface rounded-2xl divide-y divide-border">
-        {visible.map(({ concert, state }) => (
-          <div key={concert.id} className="flex items-center gap-3 px-3 py-2.5">
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm truncate">{concert.name}</div>
-              <div className="text-[11px] text-muted-foreground">
-                {new Date(concert.concert_date).toLocaleDateString("fr-BE", {
-                  day: "2-digit", month: "short", year: "numeric",
-                })}
-                {state.owed > 0 && (
-                  <span className="text-warn"> · {formatEUR(state.owed)} en attente</span>
-                )}
-              </div>
-            </div>
-            <div className="text-right shrink-0">
-              <div className="font-display text-lg leading-none">{formatEUR(state.inBox)}</div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">
-                en caisse
-              </div>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );

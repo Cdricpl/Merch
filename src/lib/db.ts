@@ -317,7 +317,3 @@ export async function recordCaisseCheck(countedCents: number, computedCents: num
     created_at: Date.now(),
   });
 }
-
-export async function deleteCaisseCheck(id: string) {
-  await deleteDoc(doc(db, "caisse_checks", id));
-}

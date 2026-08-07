@@ -1,19 +1,22 @@
 import { Component, useMemo, useState, type ReactNode } from "react";
-import { ShoppingCart, Flame, Boxes, BarChart3, Settings, Bell } from "lucide-react";
+import { ShoppingCart, Flame, Boxes, Settings, Bell } from "lucide-react";
 import { Toaster } from "sonner";
 import { StoreProvider, useStore } from "./lib/store";
 import { ActiveConcertProvider, useActiveConcert } from "./lib/activeConcert";
 import { SalesTab } from "./tabs/SalesTab";
 import { StockTab } from "./tabs/StockTab";
 import { ConcertsTab } from "./tabs/ConcertsTab";
-import { StatsTab } from "./tabs/StatsTab";
 import { SettingsTab } from "./tabs/SettingsTab";
 import { PasscodeGate } from "./components/PasscodeGate";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { LOGO_URL } from "./lib/assets";
 import { RED_MAX } from "./lib/stockLevel";
 
-type Tab = "sales" | "concerts" | "stock" | "stats" | "settings";
+// Trois onglets seulement. Les réglages restent accessibles par la roue dentée
+// de l'en-tête : ils servent rarement, mais « vider le cache et recharger » est
+// le dernier recours quand l'app se coince au stand — il ne doit jamais
+// disparaître.
+type Tab = "sales" | "concerts" | "stock" | "settings";
 
 export async function hardRefresh() {
   try {
@@ -118,6 +121,16 @@ function Shell() {
           <div className="relative flex items-center justify-center">
             <img src={LOGO_URL} alt="Ardenne Heavy" className="h-10 w-auto object-contain" />
 
+            <button
+              onClick={() => setTab("settings")}
+              aria-label="Réglages"
+              className={`absolute left-0 inset-y-0 my-auto h-9 p-2 -ml-2 active:opacity-60 ${
+                tab === "settings" ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <Settings className="h-[20px] w-[20px]" />
+            </button>
+
             <div className="absolute right-0 inset-y-0 flex items-center gap-1">
               {/* Dire que la connexion se rétablit vaut mieux que laisser croire
                   que l'app est figée : les chiffres affichés sont justes, ils
@@ -156,7 +169,6 @@ function Shell() {
           {tab === "sales" && <SalesTab onAddProduct={goAddProduct} />}
           {tab === "concerts" && <ConcertsTab />}
           {tab === "stock" && <StockTab key={stockKey} initialAddOpen={addProduct} />}
-          {tab === "stats" && <StatsTab />}
           {tab === "settings" && <SettingsTab />}
         </main>
 
@@ -168,8 +180,6 @@ function Shell() {
             <TabBtn active={tab === "sales"} onClick={() => setTab("sales")} icon={<ShoppingCart />} label="Ventes" />
             <TabBtn active={tab === "concerts"} onClick={() => setTab("concerts")} icon={<Flame />} label="Concerts" />
             <TabBtn active={tab === "stock"} onClick={goStock} icon={<Boxes />} label="Stock" />
-            <TabBtn active={tab === "stats"} onClick={() => setTab("stats")} icon={<BarChart3 />} label="Stats" />
-            <TabBtn active={tab === "settings"} onClick={() => setTab("settings")} icon={<Settings />} label="Paramètres" />
           </div>
         </nav>
       </div>

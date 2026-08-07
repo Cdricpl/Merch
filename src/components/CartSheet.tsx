@@ -136,7 +136,7 @@ export function CartSheet({
         <button
           onClick={onPay}
           disabled={cart.length === 0}
-          className="w-full rounded-2xl primary-action text-primary-foreground font-display text-2xl tracking-wider py-4 active:scale-[.98] transition disabled:opacity-40"
+          className="w-full rounded-2xl btn-primary font-display text-2xl tracking-wider py-4 active:scale-[.98] transition disabled:opacity-40"
         >
           Encaisser
         </button>

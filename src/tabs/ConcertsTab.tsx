@@ -41,13 +41,13 @@ export function ConcertsTab() {
   }
 
   return (
-    <div className="px-4 pt-4 space-y-3">
+    <div className="px-4 pt-1 pb-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl">Concerts</h1>
+        <h1 className="font-display text-[22px]">Concerts</h1>
         <button
           onClick={() => setNewOpen(true)}
           aria-label="Nouveau concert"
-          className="w-11 h-11 rounded-full primary-action text-primary-foreground flex items-center justify-center active:scale-90 transition"
+          className="w-9 h-9 rounded-full btn-primary flex items-center justify-center active:scale-90 transition"
         >
           <Plus className="h-5 w-5" />
         </button>
@@ -191,10 +191,11 @@ function ConcertDetail({
   };
 
   return (
-    <div className="px-4 pt-4 pb-6 space-y-4">
+    <div className="px-4 pt-1 pb-6 space-y-4">
       <div className="flex items-center justify-between">
-        <button onClick={onBack} aria-label="Retour" className="inline-flex items-center gap-1 text-sm text-muted-foreground -ml-1">
-          <ChevronLeft className="h-5 w-5" /> Retour
+        <button onClick={onBack} aria-label="Retour" className="inline-flex items-center gap-2 -ml-1">
+          <ChevronLeft className="h-5 w-5 text-foreground" />
+          <span className="font-display text-[22px]">Concerts</span>
         </button>
         {closed && (
           <span className="text-[10px] uppercase tracking-widest bg-muted text-muted-foreground px-2 py-1 rounded">
@@ -204,11 +205,10 @@ function ConcertDetail({
       </div>
 
       {/* Hero recap */}
-      <div className="relative rounded-2xl overflow-hidden border border-border/60 bg-gradient-to-br from-card via-card to-background p-4">
-        <div className="pointer-events-none absolute -top-16 -right-16 w-56 h-56 rounded-full bg-primary/15 blur-3xl" />
-        <div className="relative">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Recette totale</div>
-          <div className="font-display text-5xl text-primary leading-none mt-1">{formatEUR(total)}</div>
+      <div className="card-surface rounded-2xl p-4">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Recette totale</div>
+          <div className="font-display text-[2.5rem] text-primary leading-none mt-1.5">{formatEUR(total)}</div>
           <div className="text-xs text-muted-foreground mt-2">
             {totalItems} article{totalItems > 1 ? "s" : ""} vendu{totalItems > 1 ? "s" : ""}
             {totalDiscount > 0 && (
@@ -253,10 +253,10 @@ function ConcertDetail({
       {/* Répartition de l'encaissement */}
       {byPayment.length > 0 && (
         <div className="space-y-2">
-          <div className="text-xs uppercase tracking-widest text-muted-foreground font-semibold px-1">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             Qui a encaissé
           </div>
-          <div className="bg-card border border-border/60 rounded-xl divide-y divide-border/40">
+          <div className="card-surface rounded-2xl divide-y divide-border">
             {byPayment.map((p) => (
               <div key={p.key} className="flex items-center gap-3 px-3 py-2.5">
                 <div
@@ -288,11 +288,11 @@ function ConcertDetail({
         <div className="text-center text-sm text-muted-foreground py-6">Aucune vente pour ce concert.</div>
       ) : (
         <div className="space-y-3">
-          <div className="text-xs uppercase tracking-widest text-muted-foreground font-semibold px-1">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             Détail des ventes
           </div>
           {grouped.map(({ family, entries, total }) => (
-            <div key={family.id} className="bg-card border border-border/60 rounded-xl overflow-hidden">
+            <div key={family.id} className="card-surface rounded-2xl overflow-hidden">
               <div className="flex items-center gap-3 p-3 border-b border-border/60">
                 <div className="w-10 h-10 rounded-md bg-muted overflow-hidden shrink-0">
                   {family.image && <img src={family.image} alt="" className="w-full h-full object-cover" />}
@@ -323,7 +323,7 @@ function ConcertDetail({
       <div className="flex gap-2">
         <button
           onClick={save}
-          className="flex-1 rounded-xl primary-action text-primary-foreground font-display tracking-wider py-3"
+          className="flex-1 rounded-xl btn-primary font-display tracking-wider py-3"
         >
           Enregistrer
         </button>

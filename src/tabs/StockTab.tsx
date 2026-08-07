@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
-import { levelFor, levelText } from "../lib/stockLevel";
+import { levelBar, levelFor, levelText } from "../lib/stockLevel";
 import { parseName } from "../lib/category";
 import {
   createFamily, createVariant, deleteFamily, deleteVariant,
@@ -19,10 +19,13 @@ import { VariantBar } from "../components/VariantBar";
 import { useBackHandler } from "../lib/useBackHandler";
 import type { Family, Variant } from "../lib/types";
 
-export function StockTab() {
+export function StockTab({ initialAddOpen = false }: { initialAddOpen?: boolean } = {}) {
   const { families, variants, sales } = useStore();
   const [openId, setOpenId] = useState<string | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
+  // Ouvert d'emblée quand on arrive par le « + Ajouter » de l'onglet Ventes.
+  // App remonte le composant (clé), ce qui rejoue cet état initial — plutôt
+  // qu'un effet qui déclencherait un rendu en cascade.
+  const [addOpen, setAddOpen] = useState(initialAddOpen);
 
   // ⚠️ Tous les hooks doivent rester AVANT le retour anticipé du détail produit :
   // un hook appelé seulement dans la vue liste change le nombre de hooks entre
@@ -76,13 +79,13 @@ export function StockTab() {
   }
 
   return (
-    <div className="px-4 pt-4 space-y-3 pb-4">
+    <div className="px-4 pt-1 space-y-3 pb-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl">Stock</h1>
+        <h1 className="font-display text-[22px]">Stock</h1>
         <button
           onClick={() => setAddOpen(true)}
           aria-label="Nouveau produit"
-          className="w-11 h-11 rounded-full primary-action text-primary-foreground flex items-center justify-center active:scale-90 transition"
+          className="w-9 h-9 rounded-full btn-primary flex items-center justify-center active:scale-90 transition"
         >
           <Plus className="h-5 w-5" />
         </button>
@@ -95,9 +98,9 @@ export function StockTab() {
             <button
               key={family.id}
               onClick={() => setOpenId(family.id)}
-              className="metal-card w-full flex items-center gap-3 rounded-2xl p-3 text-left active:opacity-80 transition"
+              className="card-surface w-full flex items-center gap-3 rounded-2xl p-3 text-left active:opacity-80 transition"
             >
-              <div className="w-12 h-12 rounded-md bg-muted overflow-hidden shrink-0">
+              <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0">
                 {family.image && <img src={family.image} alt="" className="w-full h-full object-cover" />}
               </div>
               <div className="flex-1 min-w-0">
@@ -210,50 +213,60 @@ function FamilyDetail({
   };
 
   return (
-    <div className="px-4 pt-4 pb-6 space-y-4">
+    <div className="px-4 pt-1 pb-6 space-y-4">
       <div className="flex items-center justify-between">
-        <button onClick={onBack} aria-label="Retour" className="inline-flex items-center gap-1 text-sm text-muted-foreground -ml-1">
-          <ChevronLeft className="h-5 w-5" /> Stock
+        <button onClick={onBack} aria-label="Retour" className="inline-flex items-center gap-2 -ml-1">
+          <ChevronLeft className="h-5 w-5 text-foreground" />
+          <span className="font-display text-[22px]">Stock</span>
         </button>
         <button
           onClick={() => setEditMode((v) => !v)}
-          className="text-xs text-primary uppercase tracking-wider font-semibold"
+          className="text-[13px] text-primary font-semibold px-1 py-1"
         >
           {editMode ? "OK" : "Modifier"}
         </button>
       </div>
 
-      {/* Hero */}
-      <div className="flex items-center gap-4">
-        <div className="w-24 h-24 rounded-2xl bg-muted overflow-hidden shrink-0 border border-border/60">
-          {family.image ? (
-            <img src={family.image} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-              <Package className="h-8 w-8" />
+      {/* Carte produit */}
+      <div className="card-surface rounded-2xl p-3.5">
+        <div className="flex items-center gap-3">
+          <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden shrink-0">
+            {family.image ? (
+              <img src={family.image} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                <Package className="h-6 w-6" />
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            {category && (
+              <div className="text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                {category}
+              </div>
+            )}
+            <div className="font-display text-[19px] leading-tight truncate">{display}</div>
+            <div className="text-[13px] text-muted-foreground mt-0.5">{formatEUR(family.price_cents)}</div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Stock total
             </div>
-          )}
+            <div className={`font-display text-[2.25rem] leading-none mt-0.5 ${levelText(level)}`}>{total}</div>
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          {category && (
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{category}</div>
-          )}
-          <div className="font-display text-xl leading-tight">{display}</div>
-          {!editMode && (
-            <div className="text-primary font-display text-lg mt-1">{formatEUR(family.price_cents)}</div>
-          )}
-        </div>
-        <div className="text-right">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Total</div>
-          <div className={`font-display text-4xl leading-none ${levelText(level)}`}>{total}</div>
-        </div>
-      </div>
 
-      {!editMode && (
-        <div className="text-[11px] text-muted-foreground -mt-2">
-          Alerte à <span className={`${levelText(level)} font-semibold`}>{family.low_alert}</span>
+        {/* Jauge du total, rapportée au plus gros stock jamais atteint sur ce
+            produit — sinon une famille bien fournie afficherait une barre pleine
+            en permanence. */}
+        <div className="gauge mt-3">
+          <span
+            className={levelBar(level)}
+            style={{ width: `${Math.min(100, Math.round((total / Math.max(1, maxStock * variants.length)) * 100))}%` }}
+          />
         </div>
-      )}
+        <div className={`text-[11px] mt-1.5 ${levelText(level)}`}>Alerte à {family.low_alert}</div>
+      </div>
 
       {/* Image editor (only in edit mode) */}
       {editMode && (
@@ -328,22 +341,30 @@ function FamilyDetail({
           <div className="space-y-3">
             {groups.map((g) => (
               <div key={g.subcategory ?? "_flat"} className="space-y-2">
-                <div className="flex items-center justify-between px-1">
-                  <div className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                     {g.subcategory ?? "Par taille"}
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-[11px] text-muted-foreground">
                     {g.items.reduce((s, v) => s + v.stock, 0)} en stock
                   </div>
                 </div>
-                <div className="metal-card rounded-2xl divide-y divide-border/40">
+                <div className="card-surface rounded-2xl divide-y divide-border">
                   {g.items.map((v) => (
-                    <div key={v.id} className="flex items-center gap-2 px-2 py-1">
-                      <div className="flex-1">
-                        <VariantBar variant={v} alert={family.low_alert} maxStock={Math.max(1, maxStock)} />
+                    <div key={v.id} className="flex items-center">
+                      <div className="flex-1 min-w-0">
+                        {/* La ligne entière ouvre le réappro : le chevron de la
+                            maquette annonce déjà une action, un bouton « +N » en
+                            plus n'ajouterait rien. */}
+                        <VariantBar
+                          variant={v}
+                          alert={family.low_alert}
+                          maxStock={Math.max(1, maxStock)}
+                          onClick={() => setReplenishFor(v)}
+                        />
                       </div>
-                      {editMode ? (
-                        <div className="flex items-center gap-1 pr-1">
+                      {editMode && (
+                        <div className="flex items-center gap-1 pr-2">
                           <button
                             onClick={() => bumpStock(v, -1)}
                             disabled={v.stock <= 0}
@@ -374,13 +395,6 @@ function FamilyDetail({
                             <Trash2 className="h-3 w-3" />
                           </button>
                         </div>
-                      ) : (
-                        <button
-                          onClick={() => setReplenishFor(v)}
-                          className="px-3 h-8 rounded-md bg-primary/15 text-primary text-xs font-semibold active:scale-90 mr-1"
-                        >
-                          +N
-                        </button>
                       )}
                     </div>
                   ))}
@@ -492,7 +506,7 @@ function ReplenishModal({
         <button
           onClick={submit}
           disabled={busy}
-          className="w-full rounded-xl primary-action text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
+          className="w-full rounded-xl btn-primary font-display tracking-wider py-3 disabled:opacity-50"
         >
           {busy ? "…" : `Ajouter ${n} au stock`}
         </button>
@@ -544,7 +558,7 @@ function AddFamilyModal({ onClose }: { onClose: () => void }) {
         <button
           onClick={create}
           disabled={busy || !name.trim()}
-          className="w-full rounded-xl primary-action text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
+          className="w-full rounded-xl btn-primary font-display tracking-wider py-3 disabled:opacity-50"
         >
           {busy ? "…" : "Créer"}
         </button>
@@ -640,7 +654,7 @@ function AddVariantModal({
         <button
           onClick={create}
           disabled={busy}
-          className="w-full rounded-xl primary-action text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
+          className="w-full rounded-xl btn-primary font-display tracking-wider py-3 disabled:opacity-50"
         >
           {busy ? "…" : "Ajouter"}
         </button>

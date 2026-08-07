@@ -7,6 +7,7 @@ import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import { recordCart, undoSale, seedInitialStock } from "../lib/db";
 import { useBackHandler } from "../lib/useBackHandler";
+import { useActiveConcert } from "../lib/activeConcert";
 import { saleTotalCents, type Family, type Variant, type Concert } from "../lib/types";
 import {
   addLine, allocateDiscount, cartByVariant, cartCount, cartSubtotal,
@@ -20,17 +21,12 @@ import { CartBar } from "../components/CartBar";
 import { CartSheet } from "../components/CartSheet";
 import type { Payment } from "../lib/payment";
 
-// Le concert choisi survit aux changements d'onglet et aux rechargements.
-const LS_CONCERT = "merch:activeConcert";
-
-export function SalesTab() {
+export function SalesTab({ onAddProduct }: { onAddProduct: () => void }) {
   const { families, variants, concerts, sales, loading } = useStore();
+  const { concert, pick: pickActiveConcert } = useActiveConcert();
   const [pickerFamily, setPickerFamily] = useState<Family | null>(null);
   const [concertPicker, setConcertPicker] = useState(false);
   const [newConcertOpen, setNewConcertOpen] = useState(false);
-  const [activeConcertId, setActiveConcertId] = useState<string | null>(() => {
-    try { return localStorage.getItem(LS_CONCERT); } catch { return null; }
-  });
   const [seeding, setSeeding] = useState(false);
 
   // Panier en cours. Il ne vit que dans cet état : rien n'est écrit tant que le
@@ -48,22 +44,11 @@ export function SalesTab() {
   }, []);
 
   const pickConcert = useCallback((id: string) => {
-    setActiveConcertId(id);
     // Un panier appartient au concert où il a été commencé : changer de concert
     // le remet à zéro plutôt que de risquer de l'encaisser au mauvais endroit.
     resetCart();
-    try { localStorage.setItem(LS_CONCERT, id); } catch { /* mode privé */ }
-  }, [resetCart]);
-
-  const concert: Concert | null = useMemo(() => {
-    if (concerts.length === 0) return null;
-    if (activeConcertId) {
-      const found = concerts.find((c) => c.id === activeConcertId);
-      if (found) return found;
-    }
-    const open = concerts.filter((c) => !c.is_closed);
-    return open.find((c) => c.is_active) ?? open[0] ?? null;
-  }, [concerts, activeConcertId]);
+    pickActiveConcert(id);
+  }, [resetCart, pickActiveConcert]);
 
   const salesThisConcert = useMemo(
     () => (concert ? sales.filter((s) => s.concert_id === concert.id) : []),
@@ -72,20 +57,6 @@ export function SalesTab() {
 
   const totalCents = salesThisConcert.reduce((s, x) => s + saleTotalCents(x), 0);
   const totalItems = salesThisConcert.reduce((s, x) => s + x.quantity, 0);
-
-  // Ce qui doit se trouver dans la caisse, et ce qui est parti sur les comptes.
-  const paymentSplit = useMemo(() => {
-    let cash = 0;
-    let qr = 0;
-    let unknown = 0;
-    for (const s of salesThisConcert) {
-      const amount = saleTotalCents(s);
-      if (s.payment_method === "cash") cash += amount;
-      else if (s.payment_method === "qr") qr += amount;
-      else unknown += amount;
-    }
-    return { cash, qr, unknown };
-  }, [salesThisConcert]);
 
   // PERF : un seul passage sur les ventes pour obtenir « vendus par variante ».
   // Avant, chaque variante refiltrait tout le tableau des ventes à chaque rendu
@@ -264,7 +235,7 @@ export function SalesTab() {
         <button
           onClick={doSeed}
           disabled={seeding}
-          className="rounded-xl primary-action text-primary-foreground font-display tracking-wider px-6 py-3 disabled:opacity-50"
+          className="rounded-xl btn-primary font-display tracking-wider px-6 py-3 disabled:opacity-50"
         >
           {seeding ? "…" : "Charger le stock initial"}
         </button>
@@ -286,7 +257,7 @@ export function SalesTab() {
         </p>
         <button
           onClick={() => setNewConcertOpen(true)}
-          className="rounded-xl primary-action text-primary-foreground font-display tracking-wider px-6 py-3"
+          className="rounded-xl btn-primary font-display tracking-wider px-6 py-3"
         >
           Nouveau concert
         </button>
@@ -298,18 +269,23 @@ export function SalesTab() {
   }
 
   return (
-    <div className="px-3 pt-3 space-y-4">
+    <div className="px-4 pt-1 pb-4 space-y-3.5">
       <CaisseCard
         concert={concert}
         totalCents={totalCents}
         totalItems={totalItems}
         lowStockCount={lowStockCount}
-        paymentSplit={paymentSplit}
         onTapConcert={() => setConcertPicker(true)}
       />
 
-      <div className="px-1">
-        <h2 className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Produits</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-[19px]">Produits</h2>
+        <button
+          onClick={onAddProduct}
+          className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wider text-primary active:opacity-60 -mr-1 px-1 py-1"
+        >
+          <Plus className="h-4 w-4" /> Ajouter
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -583,7 +559,7 @@ function VariantPickerModal({
         {cartCount > 0 && (
           <button
             onClick={onPay}
-            className="mt-4 w-full flex items-center justify-between gap-3 rounded-2xl primary-action text-primary-foreground px-4 py-3.5 active:scale-[.98] transition"
+            className="mt-4 w-full flex items-center justify-between gap-3 rounded-2xl btn-primary px-4 py-3.5 active:scale-[.98] transition"
           >
             <span className="text-sm font-semibold">
               Panier · {cartCount} article{cartCount > 1 ? "s" : ""}

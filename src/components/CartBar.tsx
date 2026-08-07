@@ -45,7 +45,7 @@ export function CartBar({
 
         <button
           onClick={onPay}
-          className="px-5 primary-action text-primary-foreground font-display text-xl tracking-wider active:scale-[.97] transition shrink-0"
+          className="px-5 btn-primary font-display text-xl tracking-wider active:scale-[.97] transition shrink-0"
         >
           Encaisser
         </button>

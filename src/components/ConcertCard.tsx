@@ -17,63 +17,54 @@ export function ConcertCard({
   const active = concert.is_active && !closed;
 
   return (
-    <div
-      className={`metal-card relative rounded-2xl overflow-hidden ${
-        closed ? "opacity-70" : active ? "border-primary/40" : ""
-      }`}
-    >
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-start gap-2 min-w-0">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
-              <Mic className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <div className={`font-display text-base truncate ${closed ? "text-muted-foreground" : "text-foreground"}`}>
-                {concert.name}
-              </div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wider">
-                {new Date(concert.concert_date).toLocaleDateString("fr-BE", { day: "2-digit", month: "long", year: "numeric" })}
-              </div>
-            </div>
-          </div>
-          {closed && (
-            <span className="text-[9px] uppercase tracking-widest bg-muted text-muted-foreground px-2 py-1 rounded shrink-0">
-              Clôturé
-            </span>
-          )}
-          {active && (
-            <span className="text-[9px] uppercase tracking-widest bg-primary text-primary-foreground px-2 py-1 rounded shrink-0">
-              Actif
-            </span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 mt-3">
-          <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Caisse</div>
-            <div className={`font-display text-xl ${closed ? "text-muted-foreground" : "text-primary"}`}>
-              {formatEUR(totalCents)}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Ventes</div>
-            <div className="font-display text-xl">{totalItems}</div>
-          </div>
-        </div>
-
-        <button
-          onClick={onOpen}
-          className={`w-full mt-3 rounded-lg py-3 flex items-center justify-center gap-2 font-display tracking-wider text-sm ${
-            closed
-              ? "bg-muted text-muted-foreground"
-              : "primary-action text-primary-foreground"
+    <div className={`${active ? "card-active" : "card-surface"} rounded-2xl p-3`}>
+      <div className="flex items-center gap-2.5">
+        <Mic className={`h-[18px] w-[18px] shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
+        <h3
+          className={`font-display text-[19px] leading-none truncate flex-1 min-w-0 ${
+            closed ? "text-muted-foreground" : "text-foreground"
           }`}
         >
-          {closed ? "Voir le récap" : "Entrer"}
-          <ChevronRight className="h-4 w-4" />
-        </button>
+          {concert.name}
+        </h3>
+        <span
+          className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-md shrink-0 ${
+            active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {closed ? "Clôturé" : active ? "Actif" : "Pause"}
+        </span>
       </div>
+
+      <div className="text-[12px] uppercase tracking-wider text-muted-foreground mt-1.5 ml-[28px]">
+        {new Date(concert.concert_date).toLocaleDateString("fr-BE", {
+          day: "2-digit", month: "long", year: "numeric",
+        })}
+      </div>
+
+      <div className="flex items-stretch mt-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Caisse</div>
+          <div className={`font-display text-[21px] leading-none mt-1 ${closed ? "text-foreground/70" : "text-primary"}`}>
+            {formatEUR(totalCents)}
+          </div>
+        </div>
+        <div className="w-px bg-border mx-3" />
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Ventes</div>
+          <div className="font-display text-[21px] leading-none mt-1">{totalItems}</div>
+        </div>
+      </div>
+
+      <button
+        onClick={onOpen}
+        className={`w-full mt-3 rounded-xl h-10 flex items-center justify-center gap-2 font-display tracking-wider text-[15px] ${
+          closed ? "bg-muted text-muted-foreground" : "btn-primary"
+        }`}
+      >
+        {closed ? "Voir le récap" : "Entrer"}
+        <ChevronRight className="h-4 w-4" />
+      </button>
     </div>
   );
 }

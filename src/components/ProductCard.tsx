@@ -2,11 +2,11 @@ import { memo } from "react";
 import { Plus, Minus, ChevronRight } from "lucide-react";
 import { formatEUR } from "../lib/format";
 import { parseName } from "../lib/category";
-import { StockBadge } from "./StockBadge";
+import { familyLevel, levelBg } from "../lib/stockLevel";
 import type { Family, Variant } from "../lib/types";
 
-// memo : sans ça, vendre un CD re-rendait les 6 cartes (dont les <img> base64
-// avec filtre drop-shadow, coûteux à repeindre sur mobile).
+// memo : sans ça, vendre un CD re-rendait les 6 cartes (dont les <img> base64,
+// coûteuses à repeindre sur mobile).
 //
 // La comparaison par défaut ne suffirait pas : `variants` est un tableau
 // reconstruit à chaque snapshot Firestore, donc jamais identique. On compare
@@ -46,14 +46,26 @@ export const ProductCard = memo(function ProductCard({
   const handlePrimary = () => (single ? onAdd(family, variants[0]) : onOpenPicker(family));
 
   return (
-    <div className="metal-card relative rounded-2xl overflow-hidden flex flex-col">
-      {/* Image area — image treated as an icon : centered, ombre portée,
-          fond légèrement plus foncé pour trancher visuellement */}
+    <div className="card-surface relative rounded-2xl p-2.5 flex flex-col">
+      {/* Pastille de stock, posée dans le coin de la vignette. */}
+      <span
+        className={`absolute top-2.5 right-2.5 z-10 min-w-7 h-7 px-1.5 rounded-full text-xs font-bold flex items-center justify-center ${levelBg(
+          familyLevel(shown, lowCount, family.low_alert)
+        )}`}
+      >
+        {shown}
+      </span>
+
+      {inCart > 0 && (
+        <span className="absolute top-2.5 left-2.5 z-10 min-w-6 h-6 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-bold flex items-center justify-center ring-2 ring-card">
+          {inCart}
+        </span>
+      )}
+
       <button
         onClick={handlePrimary}
         disabled={disabled}
-        className="relative w-full aspect-square flex items-center justify-center overflow-hidden disabled:opacity-40 active:opacity-70 transition
-                   bg-[radial-gradient(circle_at_50%_35%,oklch(0.28_0.012_30),transparent_62%),linear-gradient(145deg,oklch(0.18_0.008_30),oklch(0.10_0.003_30))]"
+        className="w-full aspect-[5/4] flex items-center justify-center disabled:opacity-40 active:opacity-70 transition"
       >
         {family.image ? (
           <img
@@ -61,55 +73,48 @@ export const ProductCard = memo(function ProductCard({
             alt=""
             loading="lazy"
             decoding="async"
-            className="w-[78%] h-[78%] object-contain rounded-xl drop-shadow-[0_12px_15px_rgba(0,0,0,0.72)]"
+            className="max-w-[76%] max-h-full object-contain rounded-lg drop-shadow-[0_8px_14px_rgba(0,0,0,0.75)]"
           />
         ) : (
-          <div className="text-muted-foreground text-[10px] tracking-wider uppercase">
+          <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
             {category || "produit"}
-          </div>
-        )}
-        <div className="absolute top-2 right-2">
-          <StockBadge stock={shown} alert={family.low_alert} lowCount={lowCount} />
-        </div>
-        {inCart > 0 && (
-          <div className="absolute top-2 left-2 min-w-[1.4rem] h-[1.4rem] px-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shadow-lg shadow-black/40">
-            {inCart}
-          </div>
+          </span>
         )}
       </button>
 
-      {/* Text */}
-      <div className="px-3 pt-2 pb-1">
+      <div className="mt-1 min-w-0">
         {category && (
-          <div className="text-[10px] tracking-wider uppercase text-muted-foreground">
+          <div className="text-[9px] font-medium tracking-[0.14em] uppercase text-muted-foreground">
             {category}
           </div>
         )}
-        <div className="font-semibold text-sm text-foreground truncate">{display}</div>
-        <div className="text-primary font-display text-xl leading-none mt-1">{formatEUR(family.price_cents)}</div>
+        <div className="font-semibold text-[13.5px] leading-tight text-foreground truncate mt-0.5">
+          {display}
+        </div>
+        <div className="text-primary font-bold text-[15px] mt-1">{formatEUR(family.price_cents)}</div>
       </div>
 
-      {/* Counter row */}
-      <div className="flex items-stretch border-t border-border/60">
+      {/* Compteur : − / vendus / + */}
+      <div className="mt-2 flex items-center justify-between gap-2">
         <button
           onClick={() => onRemove(family)}
           disabled={!canRemove}
           aria-label={inCart > 0 ? "Retirer du panier" : "Annuler la dernière vente"}
-          className="flex-1 py-2.5 flex items-center justify-center text-muted-foreground active:bg-muted/50 disabled:opacity-30 disabled:pointer-events-none"
+          className="btn-step w-9 h-8 shrink-0"
         >
           <Minus className="h-4 w-4" />
         </button>
-        <div className="flex-1 py-2.5 flex flex-col items-center justify-center border-x border-border/60 min-w-0">
-          <div className="font-display text-lg leading-none">{sold}</div>
-          <div className="text-[9px] uppercase tracking-wider text-muted-foreground leading-none mt-0.5">
-            vendus
-          </div>
+
+        <div className="flex flex-col items-center leading-none min-w-0">
+          <span className="font-display text-[19px]">{sold}</span>
+          <span className="text-[9px] text-muted-foreground mt-0.5">vendus</span>
         </div>
+
         <button
           onClick={handlePrimary}
           disabled={disabled}
           aria-label={single ? "Vendre 1" : "Choisir taille"}
-          className="flex-1 py-2.5 flex items-center justify-center text-primary active:bg-primary/10 disabled:opacity-30 disabled:pointer-events-none"
+          className="btn-step w-9 h-8 shrink-0 !text-foreground"
         >
           {single ? <Plus className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>

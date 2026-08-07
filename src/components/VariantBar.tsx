@@ -1,6 +1,8 @@
+import { ChevronRight } from "lucide-react";
 import { levelBar, levelFor, levelText } from "../lib/stockLevel";
 import type { Variant } from "../lib/types";
 
+/** Ligne « une taille » : libellé, jauge, quantité colorée. */
 export function VariantBar({
   variant,
   alert,
@@ -18,20 +20,14 @@ export function VariantBar({
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 py-2 px-2 rounded-md active:bg-muted/40 transition"
+      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left active:bg-muted/40 transition"
     >
-      <div className="w-10 font-display text-base text-foreground text-left">
-        {variant.label ?? "—"}
-      </div>
-      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-        <div
-          className={`h-full rounded-full ${levelBar(l)} transition-all`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <div className={`w-10 text-right font-display text-lg ${levelText(l)}`}>
-        {variant.stock}
-      </div>
+      <span className="w-8 shrink-0 font-semibold text-[14px]">{variant.label ?? "—"}</span>
+      <span className="gauge flex-1">
+        <span className={levelBar(l)} style={{ width: `${pct}%` }} />
+      </span>
+      <span className={`w-7 text-right font-display text-[17px] ${levelText(l)}`}>{variant.stock}</span>
+      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
     </button>
   );
 }

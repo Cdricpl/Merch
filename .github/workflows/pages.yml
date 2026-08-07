@@ -5,6 +5,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Un push sur main et un déclenchement manuel produisaient deux runs simultanés
+# qui se disputaient la branche gh-pages : le perdant échouait sur un push
+# rejeté. On n'en garde qu'un à la fois, le plus récent gagne.
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

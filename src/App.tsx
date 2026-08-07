@@ -1,24 +1,19 @@
-import { Component, useMemo, useState, type ReactNode } from "react";
-import { ShoppingCart, Flame, Boxes, Settings, Bell } from "lucide-react";
+import { Component, useState, type ReactNode } from "react";
+import { ShoppingCart, Flame, Boxes } from "lucide-react";
 import { Toaster } from "sonner";
 import { StoreProvider, useStore } from "./lib/store";
 import { ActiveConcertProvider, useActiveConcert } from "./lib/activeConcert";
 import { SalesTab } from "./tabs/SalesTab";
 import { StockTab } from "./tabs/StockTab";
 import { ConcertsTab } from "./tabs/ConcertsTab";
-import { SettingsTab } from "./tabs/SettingsTab";
 import { PasscodeGate } from "./components/PasscodeGate";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { LOGO_URL } from "./lib/assets";
-import { RED_MAX } from "./lib/stockLevel";
 
-// Trois onglets seulement. Les réglages restent accessibles par la roue dentée
-// de l'en-tête : ils servent rarement, mais « vider le cache et recharger » est
-// le dernier recours quand l'app se coince au stand — il ne doit jamais
-// disparaître.
-type Tab = "sales" | "concerts" | "stock" | "settings";
+// Trois onglets, rien d'autre : c'est tout ce qui sert au stand.
+type Tab = "sales" | "concerts" | "stock";
 
-export async function hardRefresh() {
+async function hardRefresh() {
   try {
     if ("caches" in window) {
       const keys = await caches.keys();
@@ -96,15 +91,8 @@ function Shell() {
   // initial rejoué suffit, sans rendu en cascade.
   const [stockKey, setStockKey] = useState(0);
   const [addProduct, setAddProduct] = useState(false);
-  const { variants, degraded } = useStore();
+  const { degraded } = useStore();
   const { concert } = useActiveConcert();
-
-  // Nombre de TAILLES dans le rouge : le cumul d'une famille ne descend jamais
-  // assez bas pour alerter, alors qu'une taille à 1 doit se voir.
-  const lowStockCount = useMemo(
-    () => variants.reduce((n, v) => n + (v.stock <= RED_MAX ? 1 : 0), 0),
-    [variants]
-  );
 
   const goStock = () => { setAddProduct(false); setStockKey((k) => k + 1); setTab("stock"); };
   const goAddProduct = () => { setAddProduct(true); setStockKey((k) => k + 1); setTab("stock"); };
@@ -116,39 +104,19 @@ function Shell() {
           entier qui défile — et la barre d'onglets part hors de l'écran. */}
       <div className="h-[100dvh] max-w-[560px] mx-auto flex flex-col relative overflow-hidden sm:border-x sm:border-border">
         <header className="px-4 pt-[max(0.875rem,env(safe-area-inset-top))] pb-3 shrink-0">
-          {/* Logo centré sur la largeur : la cloche est posée par-dessus, à
-              droite, pour qu'elle ne décale pas le centrage. */}
+          {/* Rien que le logo, centré. Le bandeau de reconnexion se pose
+              par-dessus, à droite, pour ne pas décaler le centrage. */}
           <div className="relative flex items-center justify-center">
             <img src={LOGO_URL} alt="Ardenne Heavy" className="h-10 w-auto object-contain" />
 
-            <button
-              onClick={() => setTab("settings")}
-              aria-label="Réglages"
-              className={`absolute left-0 inset-y-0 my-auto h-9 p-2 -ml-2 active:opacity-60 ${
-                tab === "settings" ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <Settings className="h-[20px] w-[20px]" />
-            </button>
-
-            <div className="absolute right-0 inset-y-0 flex items-center gap-1">
-              {/* Dire que la connexion se rétablit vaut mieux que laisser croire
-                  que l'app est figée : les chiffres affichés sont justes, ils
-                  rattrapent simplement leur retard. */}
-              {degraded && (
-                <span className="text-[10px] text-warn bg-warn/10 px-2 py-1 rounded-full">Reconnexion…</span>
-              )}
-              <button
-                onClick={goStock}
-                aria-label={`Stock faible : ${lowStockCount} taille${lowStockCount > 1 ? "s" : ""}`}
-                className="relative p-2 -mr-2 text-foreground active:opacity-60"
-              >
-                <Bell className="h-[22px] w-[22px]" />
-                {lowStockCount > 0 && (
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
-                )}
-              </button>
-            </div>
+            {/* Dire que la connexion se rétablit vaut mieux que laisser croire
+                que l'app est figée : les chiffres affichés sont justes, ils
+                rattrapent simplement leur retard. */}
+            {degraded && (
+              <span className="absolute right-0 inset-y-0 my-auto h-5 text-[10px] leading-5 text-warn bg-warn/10 px-2 rounded-full">
+                Reconnexion…
+              </span>
+            )}
           </div>
 
           {concert && (
@@ -169,7 +137,6 @@ function Shell() {
           {tab === "sales" && <SalesTab onAddProduct={goAddProduct} />}
           {tab === "concerts" && <ConcertsTab />}
           {tab === "stock" && <StockTab key={stockKey} initialAddOpen={addProduct} />}
-          {tab === "settings" && <SettingsTab />}
         </main>
 
         <nav

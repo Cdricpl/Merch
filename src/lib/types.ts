@@ -37,7 +37,12 @@ export type Concert = {
 /** Une sortie d'argent de la caisse : essence, repas, achat de matériel… */
 export type Expense = {
   id: string;
-  concert_id: string;
+  /**
+   * Le concert concerné, ou null : toutes les dépenses ne se rattachent pas à
+   * une soirée (achat de stock, frais de groupe). La saisie se fait depuis
+   * l'onglet Caisse, où le concert n'est pas forcément connu.
+   */
+  concert_id: string | null;
   label: string;
   amount_cents: number;
   created_at: number;
@@ -56,6 +61,11 @@ export type Settlement = {
   concert_id: string;
   payee: string;
   amount_cents: number;
+  /**
+   * Les remises créées d'un même geste partagent cet horodatage : solder un
+   * membre écrit une ligne par concert, et « Annuler » doit pouvoir défaire le
+   * geste entier, pas seulement sa dernière ligne.
+   */
   created_at: number;
 };
 

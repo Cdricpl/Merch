@@ -149,11 +149,16 @@ export function caisseFor(
  * Somme des états de tous les concerts, plus l'écart du dernier comptage : le
  * contenu réel de la boîte.
  */
-export function caisseTotal(states: CaisseState[], adjust = 0): CaisseState {
+export function caisseTotal(
+  states: CaisseState[],
+  adjust = 0,
+  /** Dépenses rattachées à aucun concert (achat de stock, frais de groupe). */
+  looseExpenses = 0,
+): CaisseState {
   const merged = new Map<string, PayeeDebt>();
   const out: CaisseState = {
-    cashSales: 0, feeCash: 0, settled: 0, expenses: 0, adjust,
-    inBox: adjust, owed: 0, debts: [], unknownSales: 0, revenue: 0,
+    cashSales: 0, feeCash: 0, settled: 0, expenses: looseExpenses, adjust,
+    inBox: adjust - looseExpenses, owed: 0, debts: [], unknownSales: 0, revenue: 0,
   };
 
   for (const s of states) {

@@ -1,22 +1,16 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  ChevronLeft, Plus, Trash2, Lock, RotateCcw, Banknote, QrCode,
-  Wallet, ArrowDownLeft, Check, Undo2,
+  ChevronLeft, Plus, Trash2, Lock, RotateCcw, Banknote, QrCode, Wallet,
 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import { PAYEES } from "../lib/payment";
-import { caisseFor } from "../lib/caisse";
-import {
-  createExpense, createSettlement, deleteConcert, deleteExpense,
-  deleteSettlement, updateConcert,
-} from "../lib/db";
+import { deleteConcert, updateConcert } from "../lib/db";
 import { useBackHandler } from "../lib/useBackHandler";
-import { saleTotalCents, type Concert, type Expense } from "../lib/types";
+import { saleTotalCents, type Concert } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
 import { ConcertCard } from "../components/ConcertCard";
-import { CaisseBox } from "../components/CaisseBox";
 
 export function ConcertsTab() {
   const { concerts, sales } = useStore();
@@ -150,10 +144,6 @@ function ConcertDetail({
   const totalItems = mySales.reduce((s, x) => s + x.quantity, 0);
   const totalDiscount = mySales.reduce((s, x) => s + (x.discount_cents ?? 0), 0);
 
-  const caisse = useMemo(
-    () => caisseFor(concert, mySales, myExpenses, mySettlements),
-    [concert, mySales, myExpenses, mySettlements]
-  );
 
   const save = async () => {
     try {
@@ -191,26 +181,6 @@ function ConcertDetail({
     } catch (e) { toast.error((e as Error).message); }
   };
 
-  /** Le membre rend ce qu'il détient encore pour ce concert. */
-  const settle = async (payee: string, cents: number) => {
-    if (cents === 0) return;
-    try {
-      await createSettlement(concert.id, payee, cents);
-      toast.success(`${payee} a remis ${formatEUR(cents)}`);
-    } catch (e) { toast.error((e as Error).message); }
-  };
-
-  const unsettle = async (payee: string) => {
-    const mine = mySettlements
-      .filter((r) => r.payee === payee)
-      .sort((a, b) => b.created_at - a.created_at);
-    const last = mine[0];
-    if (!last) return;
-    try {
-      await deleteSettlement(last.id);
-      toast.success("Remise annulée");
-    } catch (e) { toast.error((e as Error).message); }
-  };
 
   return (
     <div className="px-4 pt-1 pb-6 space-y-4">
@@ -273,58 +243,6 @@ function ConcertDetail({
       </div>
 
       <FeeEditor concert={concert} />
-
-      <CaisseBox state={caisse} />
-
-      {/* Qui détient encore de l'argent, et le bouton qui solde. */}
-      {caisse.debts.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            Encaissé par les membres
-          </div>
-          <div className="card-surface rounded-2xl divide-y divide-border">
-            {caisse.debts.map((d) => {
-              const done = d.remaining <= 0;
-              return (
-                <div key={d.payee} className="flex items-center gap-3 px-3 py-2.5">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                      done ? "bg-ok/20 text-ok" : "bg-primary/20 text-primary"
-                    }`}
-                  >
-                    {done ? <Check className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm truncate">{d.payee}</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      encaissé {formatEUR(d.collected)}
-                      {d.settled > 0 && <> · remis {formatEUR(d.settled)}</>}
-                    </div>
-                  </div>
-                  {done ? (
-                    <button
-                      onClick={() => unsettle(d.payee)}
-                      className="shrink-0 inline-flex items-center gap-1 text-[11px] text-muted-foreground px-2 py-2 active:text-destructive"
-                    >
-                      <Undo2 className="h-3.5 w-3.5" /> Annuler
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => settle(d.payee, d.remaining)}
-                      className="shrink-0 inline-flex items-center gap-1.5 rounded-lg btn-primary text-[12px] font-semibold px-3 py-2 active:scale-95 transition"
-                    >
-                      <ArrowDownLeft className="h-3.5 w-3.5" />
-                      Remis {formatEUR(d.remaining)}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <ExpenseList concertId={concert.id} expenses={myExpenses} />
 
       {/* Sales breakdown */}
       {grouped.length === 0 ? (
@@ -494,85 +412,6 @@ function FeeEditor({ concert }: { concert: Concert }) {
           )}
         </>
       )}
-    </div>
-  );
-}
-
-/** Ce qui sort de la caisse : essence, repas, achat de matériel… */
-function ExpenseList({ concertId, expenses }: { concertId: string; expenses: Expense[] }) {
-  const [label, setLabel] = useState("");
-  const [amount, setAmount] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const total = expenses.reduce((s, e) => s + e.amount_cents, 0);
-
-  const add = async () => {
-    const cents = Math.round(parseFloat(amount.replace(",", ".") || "0") * 100);
-    if (!label.trim() || cents <= 0) return;
-    setBusy(true);
-    try {
-      await createExpense(concertId, label.trim(), cents);
-      setLabel("");
-      setAmount("");
-    } catch (e) { toast.error((e as Error).message); }
-    finally { setBusy(false); }
-  };
-
-  const remove = async (id: string) => {
-    try { await deleteExpense(id); }
-    catch (e) { toast.error((e as Error).message); }
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Dépenses</div>
-        {total > 0 && <div className="text-[13px] text-destructive">−{formatEUR(total)}</div>}
-      </div>
-
-      {expenses.length > 0 && (
-        <div className="card-surface rounded-2xl divide-y divide-border">
-          {expenses.map((e) => (
-            <div key={e.id} className="flex items-center gap-3 px-3 py-2.5">
-              <div className="flex-1 min-w-0">
-                <div className="text-sm truncate">{e.label}</div>
-              </div>
-              <div className="font-display text-lg shrink-0">{formatEUR(e.amount_cents)}</div>
-              <button
-                onClick={() => remove(e.id)}
-                aria-label="Supprimer la dépense"
-                className="shrink-0 w-8 h-8 flex items-center justify-center text-muted-foreground active:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="Essence, repas…"
-          className="flex-1 min-w-0 rounded-xl bg-input border border-border px-3 py-2.5 text-sm"
-        />
-        <input
-          type="number" step="1" min={0} inputMode="decimal"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="€"
-          className="w-20 shrink-0 rounded-xl bg-input border border-border px-3 py-2.5 text-sm"
-        />
-        <button
-          onClick={add}
-          disabled={busy || !label.trim() || !amount}
-          aria-label="Ajouter la dépense"
-          className="shrink-0 w-11 rounded-xl btn-primary flex items-center justify-center disabled:opacity-40"
-        >
-          <Plus className="h-5 w-5" />
-        </button>
-      </div>
     </div>
   );
 }

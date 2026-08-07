@@ -54,7 +54,11 @@ export async function deleteConcert(
 
 // -------- Caisse : dépenses et remises --------
 
-export async function createExpense(concertId: string, label: string, amountCents: number) {
+export async function createExpense(
+  concertId: string | null,
+  label: string,
+  amountCents: number,
+) {
   await addDoc(collection(db, "expenses"), {
     concert_id: concertId,
     label,
@@ -67,18 +71,35 @@ export async function deleteExpense(id: string) {
   await deleteDoc(doc(db, "expenses", id));
 }
 
-/** Un membre remet dans la boîte ce qu'il avait encaissé. */
-export async function createSettlement(concertId: string, payee: string, amountCents: number) {
-  await addDoc(collection(db, "settlements"), {
-    concert_id: concertId,
-    payee,
-    amount_cents: Math.round(amountCents),
-    created_at: Date.now(),
-  });
+/**
+ * Un membre remet dans la boîte ce qu'il avait encaissé.
+ *
+ * Il peut devoir de l'argent sur plusieurs concerts à la fois : on écrit une
+ * ligne par concert, mais toutes avec le MÊME horodatage, pour que le geste
+ * reste annulable d'un bloc.
+ */
+export async function createSettlements(
+  entries: Array<{ concertId: string; payee: string; amountCents: number }>,
+) {
+  if (entries.length === 0) return;
+  const now = Date.now();
+  const batch = writeBatch(db);
+  for (const e of entries) {
+    batch.set(doc(collection(db, "settlements")), {
+      concert_id: e.concertId,
+      payee: e.payee,
+      amount_cents: Math.round(e.amountCents),
+      created_at: now,
+    });
+  }
+  await batch.commit();
 }
 
-export async function deleteSettlement(id: string) {
-  await deleteDoc(doc(db, "settlements", id));
+export async function deleteSettlements(ids: string[]) {
+  if (ids.length === 0) return;
+  const batch = writeBatch(db);
+  for (const id of ids) batch.delete(doc(db, "settlements", id));
+  await batch.commit();
 }
 
 // -------- Families & variants --------

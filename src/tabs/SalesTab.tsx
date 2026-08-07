@@ -8,6 +8,7 @@ import { formatEUR } from "../lib/format";
 import { recordCart, undoSale, seedInitialStock } from "../lib/db";
 import { useBackHandler } from "../lib/useBackHandler";
 import { useActiveConcert } from "../lib/activeConcert";
+import { RED_MAX } from "../lib/stockLevel";
 import { saleTotalCents, type Family, type Variant, type Concert } from "../lib/types";
 import {
   addLine, allocateDiscount, cartByVariant, cartCount, cartSubtotal,
@@ -96,7 +97,7 @@ export function SalesTab({ onAddProduct }: { onAddProduct: () => void }) {
         stock += left;
         inCart += reserved;
         sold += soldByVariant.get(v.id) ?? 0;
-        if (left <= f.low_alert) lowCount++;
+        if (left <= RED_MAX) lowCount++;
       }
       return { family: f, items, stock, sold, inCart, lowCount };
     });
@@ -517,7 +518,7 @@ function VariantPickerModal({
               const count = countFor(v.id);
               const reserved = inCartFor(v.id);
               const left = Math.max(0, v.stock - reserved);
-              const lowStock = left <= family.low_alert;
+              const lowStock = left <= RED_MAX;
               return (
                 <li key={v.id} className="flex items-center gap-3 bg-muted/50 rounded-xl p-2.5">
                   <div className="flex-1 min-w-0">

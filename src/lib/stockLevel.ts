@@ -1,50 +1,53 @@
-// Colored dot / bar system used across the app.
-// - 0            → empty (grey)
-// - <= alert     → critical (red)
-// - <= alert*4   → warning (orange)
-// - > alert*4    → ok (green)
+// Code couleur du stock, en valeurs ABSOLUES — les mêmes pour tous les
+// produits, pour qu'un rouge veuille toujours dire la même chose d'un écran à
+// l'autre :
+//   0 à 3   → rouge
+//   4 à 9   → orange
+//   10 et + → vert
 
-export type StockLevel = "empty" | "critical" | "warning" | "ok";
+export type StockLevel = "critical" | "warning" | "ok";
 
-export function levelFor(stock: number, alert: number): StockLevel {
-  if (stock <= 0) return "empty";
-  if (stock <= alert) return "critical";
-  if (stock <= alert * 4) return "warning";
+export const RED_MAX = 3;
+export const ORANGE_MAX = 9;
+
+export function levelFor(stock: number): StockLevel {
+  if (stock <= RED_MAX) return "critical";
+  if (stock <= ORANGE_MAX) return "warning";
   return "ok";
 }
 
-// Niveau d'une famille entière. Le total cumulé (ex. 40 t-shirts toutes tailles)
-// ne descend jamais sous le seuil, alors qu'une taille à 1 doit alerter : dès
-// qu'une variante est en alerte, la famille l'est aussi.
-export function familyLevel(totalStock: number, lowVariantCount: number, alert: number): StockLevel {
-  if (totalStock <= 0) return "empty";
+/**
+ * Niveau d'une famille entière.
+ *
+ * Le cumul d'une famille (ex. 40 t-shirts toutes tailles) ne descend jamais
+ * dans le rouge, alors qu'une taille à 1 doit alerter : dès qu'une variante est
+ * dans le rouge, la famille l'est aussi.
+ */
+export function familyLevel(totalStock: number, lowVariantCount: number): StockLevel {
   if (lowVariantCount > 0) return "critical";
-  return levelFor(totalStock, alert);
+  return levelFor(totalStock);
 }
 
 export function levelBg(l: StockLevel): string {
   switch (l) {
-    case "empty":    return "bg-muted text-muted-foreground";
     case "critical": return "bg-destructive text-destructive-foreground";
-    case "warning":  return "bg-amber-500 text-black";
-    case "ok":       return "bg-emerald-600 text-white";
+    case "warning":  return "bg-warn text-black";
+    case "ok":       return "bg-ok text-white";
   }
 }
 
 export function levelText(l: StockLevel): string {
   switch (l) {
-    case "empty":    return "text-muted-foreground";
     case "critical": return "text-destructive";
-    case "warning":  return "text-amber-500";
-    case "ok":       return "text-emerald-500";
+    case "warning":  return "text-warn";
+    case "ok":       return "text-ok";
   }
 }
 
 export function levelBar(l: StockLevel): string {
   switch (l) {
-    case "empty":    return "bg-muted";
     case "critical": return "bg-destructive";
-    case "warning":  return "bg-amber-500";
-    case "ok":       return "bg-emerald-600";
+    case "warning":  return "bg-warn";
+    case "ok":       return "bg-ok";
   }
 }

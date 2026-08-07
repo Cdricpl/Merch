@@ -5,16 +5,14 @@ import type { Variant } from "../lib/types";
 /** Ligne « une taille » : libellé, jauge, quantité colorée. */
 export function VariantBar({
   variant,
-  alert,
   maxStock,
   onClick,
 }: {
   variant: Variant;
-  alert: number;
   maxStock: number;
   onClick?: () => void;
 }) {
-  const l = levelFor(variant.stock, alert);
+  const l = levelFor(variant.stock);
   const pct = maxStock <= 0 ? 0 : Math.min(100, Math.round((variant.stock / maxStock) * 100));
 
   return (

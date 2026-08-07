@@ -1,4 +1,4 @@
-import { Mic, ChevronRight } from "lucide-react";
+import { Flame, ChevronRight } from "lucide-react";
 import { formatEUR } from "../lib/format";
 import type { Concert } from "../lib/types";
 
@@ -19,7 +19,7 @@ export function ConcertCard({
   return (
     <div className={`${active ? "card-active" : "card-surface"} rounded-2xl p-3`}>
       <div className="flex items-center gap-2.5">
-        <Mic className={`h-[18px] w-[18px] shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
+        <Flame className={`h-[18px] w-[18px] shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
         <h3
           className={`font-display text-[19px] leading-none truncate flex-1 min-w-0 ${
             closed ? "text-muted-foreground" : "text-foreground"

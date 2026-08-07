@@ -1,5 +1,5 @@
 import { Component, useMemo, useState, type ReactNode } from "react";
-import { ShoppingCart, Mic, Boxes, BarChart3, Settings, Bell } from "lucide-react";
+import { ShoppingCart, Flame, Boxes, BarChart3, Settings, Bell } from "lucide-react";
 import { Toaster } from "sonner";
 import { StoreProvider, useStore } from "./lib/store";
 import { ActiveConcertProvider, useActiveConcert } from "./lib/activeConcert";
@@ -11,6 +11,7 @@ import { SettingsTab } from "./tabs/SettingsTab";
 import { PasscodeGate } from "./components/PasscodeGate";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { LOGO_URL } from "./lib/assets";
+import { RED_MAX } from "./lib/stockLevel";
 
 type Tab = "sales" | "concerts" | "stock" | "stats" | "settings";
 
@@ -92,20 +93,15 @@ function Shell() {
   // initial rejoué suffit, sans rendu en cascade.
   const [stockKey, setStockKey] = useState(0);
   const [addProduct, setAddProduct] = useState(false);
-  const { families, variants, degraded } = useStore();
+  const { variants, degraded } = useStore();
   const { concert } = useActiveConcert();
 
-  // Nombre de TAILLES sous le seuil : le cumul d'une famille ne descend jamais
+  // Nombre de TAILLES dans le rouge : le cumul d'une famille ne descend jamais
   // assez bas pour alerter, alors qu'une taille à 1 doit se voir.
-  const lowStockCount = useMemo(() => {
-    const alertByFamily = new Map(families.map((f) => [f.id, f.low_alert]));
-    let n = 0;
-    for (const v of variants) {
-      const a = alertByFamily.get(v.family_id);
-      if (a !== undefined && v.stock <= a) n++;
-    }
-    return n;
-  }, [families, variants]);
+  const lowStockCount = useMemo(
+    () => variants.reduce((n, v) => n + (v.stock <= RED_MAX ? 1 : 0), 0),
+    [variants]
+  );
 
   const goStock = () => { setAddProduct(false); setStockKey((k) => k + 1); setTab("stock"); };
   const goAddProduct = () => { setAddProduct(true); setStockKey((k) => k + 1); setTab("stock"); };
@@ -116,40 +112,44 @@ function Shell() {
           avec son contenu, `main` ne scrolle jamais tout seul, c'est le document
           entier qui défile — et la barre d'onglets part hors de l'écran. */}
       <div className="h-[100dvh] max-w-[560px] mx-auto flex flex-col relative overflow-hidden sm:border-x sm:border-border">
-        <header className="px-4 pt-[max(0.875rem,env(safe-area-inset-top))] pb-3 flex items-center gap-3 shrink-0">
-          <img src={LOGO_URL} alt="Ardenne Heavy" className="h-9 w-auto object-contain shrink-0" />
+        <header className="px-4 pt-[max(0.875rem,env(safe-area-inset-top))] pb-3 shrink-0">
+          {/* Logo centré sur la largeur : la cloche est posée par-dessus, à
+              droite, pour qu'elle ne décale pas le centrage. */}
+          <div className="relative flex items-center justify-center">
+            <img src={LOGO_URL} alt="Ardenne Heavy" className="h-10 w-auto object-contain" />
+
+            <div className="absolute right-0 inset-y-0 flex items-center gap-1">
+              {/* Dire que la connexion se rétablit vaut mieux que laisser croire
+                  que l'app est figée : les chiffres affichés sont justes, ils
+                  rattrapent simplement leur retard. */}
+              {degraded && (
+                <span className="text-[10px] text-warn bg-warn/10 px-2 py-1 rounded-full">Reconnexion…</span>
+              )}
+              <button
+                onClick={goStock}
+                aria-label={`Stock faible : ${lowStockCount} taille${lowStockCount > 1 ? "s" : ""}`}
+                className="relative p-2 -mr-2 text-foreground active:opacity-60"
+              >
+                <Bell className="h-[22px] w-[22px]" />
+                {lowStockCount > 0 && (
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
+                )}
+              </button>
+            </div>
+          </div>
 
           {concert && (
-            <div className="min-w-0 flex-1">
-              <div className="font-display text-[17px] leading-none text-primary truncate">
+            <div className="mt-2 text-center">
+              <div className="font-display text-[16px] leading-none text-primary truncate">
                 {concert.name}
               </div>
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground mt-1">
+              <div className="text-[10.5px] uppercase tracking-wider text-muted-foreground mt-1">
                 {new Date(concert.concert_date).toLocaleDateString("fr-BE", {
                   day: "2-digit", month: "long", year: "numeric",
                 })}
               </div>
             </div>
           )}
-
-          <div className="flex items-center gap-1 ml-auto shrink-0">
-            {/* Dire que la connexion se rétablit vaut mieux que laisser croire
-                que l'app est figée : les chiffres affichés sont justes, ils
-                rattrapent simplement leur retard. */}
-            {degraded && (
-              <span className="text-[10px] text-warn bg-warn/10 px-2 py-1 rounded-full">Reconnexion…</span>
-            )}
-            <button
-              onClick={goStock}
-              aria-label={`Stock faible : ${lowStockCount} taille${lowStockCount > 1 ? "s" : ""}`}
-              className="relative p-2 text-foreground active:opacity-60"
-            >
-              <Bell className="h-[22px] w-[22px]" />
-              {lowStockCount > 0 && (
-                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
-              )}
-            </button>
-          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto">
@@ -166,7 +166,7 @@ function Shell() {
         >
           <div className="flex">
             <TabBtn active={tab === "sales"} onClick={() => setTab("sales")} icon={<ShoppingCart />} label="Ventes" />
-            <TabBtn active={tab === "concerts"} onClick={() => setTab("concerts")} icon={<Mic />} label="Concerts" />
+            <TabBtn active={tab === "concerts"} onClick={() => setTab("concerts")} icon={<Flame />} label="Concerts" />
             <TabBtn active={tab === "stock"} onClick={goStock} icon={<Boxes />} label="Stock" />
             <TabBtn active={tab === "stats"} onClick={() => setTab("stats")} icon={<BarChart3 />} label="Stats" />
             <TabBtn active={tab === "settings"} onClick={() => setTab("settings")} icon={<Settings />} label="Paramètres" />

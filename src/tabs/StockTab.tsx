@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
-import { levelBar, levelFor, levelText } from "../lib/stockLevel";
+import { levelBar, levelFor, levelText, ORANGE_MAX, RED_MAX } from "../lib/stockLevel";
 import { parseName } from "../lib/category";
 import {
   createFamily, createVariant, deleteFamily, deleteVariant,
@@ -48,7 +48,7 @@ export function StockTab({ initialAddOpen = false }: { initialAddOpen?: boolean 
           family: f,
           items,
           total: items.reduce((s, x) => s + x.stock, 0),
-          lowCount: items.reduce((n, x) => n + (x.stock <= f.low_alert ? 1 : 0), 0),
+          lowCount: items.reduce((n, x) => n + (x.stock <= RED_MAX ? 1 : 0), 0),
         };
       }),
     [families, variantsByFamily]
@@ -112,7 +112,7 @@ export function StockTab({ initialAddOpen = false }: { initialAddOpen?: boolean 
                   {formatEUR(family.price_cents)} · {items.length} taille{items.length > 1 ? "s" : ""}
                 </div>
               </div>
-              <StockBadge stock={total} alert={family.low_alert} lowCount={lowCount} />
+              <StockBadge stock={total} lowCount={lowCount} />
               <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </button>
           );
@@ -151,7 +151,7 @@ function FamilyDetail({
   const total = variants.reduce((s, x) => s + x.stock, 0);
   const maxStock = variants.reduce((m, x) => Math.max(m, x.stock), 0);
   const { category, display } = parseName(family.name);
-  const level = levelFor(total, family.low_alert);
+  const level = levelFor(total);
 
   const onImageChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -184,11 +184,6 @@ function FamilyDetail({
   const setName = async (name: string) => {
     if (!name.trim()) return;
     try { await updateFamily(family.id, { name: name.trim() }); }
-    catch (e) { toast.error((e as Error).message); }
-  };
-
-  const setLowAlert = async (n: number) => {
-    try { await updateFamily(family.id, { low_alert: Math.max(0, n) }); }
     catch (e) { toast.error((e as Error).message); }
   };
 
@@ -265,7 +260,9 @@ function FamilyDetail({
             style={{ width: `${Math.min(100, Math.round((total / Math.max(1, maxStock * variants.length)) * 100))}%` }}
           />
         </div>
-        <div className={`text-[11px] mt-1.5 ${levelText(level)}`}>Alerte à {family.low_alert}</div>
+        <div className={`text-[11px] mt-1.5 ${levelText(level)}`}>
+          {total <= RED_MAX ? "À réassortir" : total <= ORANGE_MAX ? "Stock bas" : "Stock confortable"}
+        </div>
       </div>
 
       {/* Image editor (only in edit mode) */}
@@ -296,32 +293,18 @@ function FamilyDetail({
             onBlur={(e) => e.target.value !== family.name && setName(e.target.value)}
             className="w-full rounded-xl bg-input border border-border px-3 py-3"
           />
-          <div className="grid grid-cols-2 gap-2">
-            <label className="rounded-xl bg-muted px-3 py-2 block">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Prix (€)</div>
-              <input
-                type="number" step="0.5"
-                defaultValue={(family.price_cents / 100).toString()}
-                onBlur={(e) => {
-                  const cents = Math.round(parseFloat(e.target.value || "0") * 100);
-                  if (cents !== family.price_cents) setPrice(cents);
-                }}
-                className="w-full bg-transparent text-lg font-display outline-none"
-              />
-            </label>
-            <label className="rounded-xl bg-muted px-3 py-2 block">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Alerte à</div>
-              <input
-                type="number" min={0}
-                defaultValue={family.low_alert.toString()}
-                onBlur={(e) => {
-                  const n = parseInt(e.target.value || "0");
-                  if (n !== family.low_alert) setLowAlert(n);
-                }}
-                className="w-full bg-transparent text-lg font-display outline-none"
-              />
-            </label>
-          </div>
+          <label className="rounded-xl bg-muted px-3 py-2 block">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Prix (€)</div>
+            <input
+              type="number" step="0.5"
+              defaultValue={(family.price_cents / 100).toString()}
+              onBlur={(e) => {
+                const cents = Math.round(parseFloat(e.target.value || "0") * 100);
+                if (cents !== family.price_cents) setPrice(cents);
+              }}
+              className="w-full bg-transparent text-lg font-display outline-none"
+            />
+          </label>
         </div>
       )}
 
@@ -358,7 +341,6 @@ function FamilyDetail({
                             plus n'ajouterait rien. */}
                         <VariantBar
                           variant={v}
-                          alert={family.low_alert}
                           maxStock={Math.max(1, maxStock)}
                           onClick={() => setReplenishFor(v)}
                         />

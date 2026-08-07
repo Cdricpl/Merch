@@ -50,7 +50,7 @@ export const ProductCard = memo(function ProductCard({
       {/* Pastille de stock, posée dans le coin de la vignette. */}
       <span
         className={`absolute top-2.5 right-2.5 z-10 min-w-7 h-7 px-1.5 rounded-full text-xs font-bold flex items-center justify-center ${levelBg(
-          familyLevel(shown, lowCount, family.low_alert)
+          familyLevel(shown, lowCount)
         )}`}
       >
         {shown}

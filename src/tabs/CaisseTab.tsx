@@ -214,7 +214,6 @@ function ExpenseList({ expenses, concerts }: { expenses: Expense[]; concerts: Co
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const total = expenses.reduce((s, e) => s + e.amount_cents, 0);
   const nameOf = useMemo(() => {
     const m = new Map(concerts.map((c) => [c.id, c.name]));
     return (id: string | null) => (id ? m.get(id) ?? null : null);
@@ -241,10 +240,7 @@ function ExpenseList({ expenses, concerts }: { expenses: Expense[]; concerts: Co
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Dépenses</div>
-        {total > 0 && <div className="text-[13px] text-destructive">−{formatEUR(total)}</div>}
-      </div>
+      <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Dépenses</div>
 
       {expenses.length > 0 && (
         <div className="card-surface rounded-2xl divide-y divide-border">

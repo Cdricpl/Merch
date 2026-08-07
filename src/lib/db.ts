@@ -8,6 +8,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import type { Payment } from "./payment";
 import type { Family, Variant } from "./types";
 
 // -------- Concerts --------
@@ -117,6 +118,7 @@ export async function recordSale(params: {
   concertId: string;
   variantId: string;
   priceCents: number;
+  payment: Payment;
 }) {
   const batch = writeBatch(db);
   batch.update(doc(db, "variants", params.variantId), { stock: increment(-1) });
@@ -126,6 +128,8 @@ export async function recordSale(params: {
     quantity: 1,
     unit_price_cents: params.priceCents,
     created_at: Date.now(),
+    payment_method: params.payment.method,
+    payment_payee: params.payment.payee,
   });
   await batch.commit();
 }

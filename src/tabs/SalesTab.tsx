@@ -11,6 +11,8 @@ import type { Family, Variant, Concert } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
 import { CaisseCard } from "../components/CaisseCard";
 import { ProductCard } from "../components/ProductCard";
+import { PaymentSheet } from "../components/PaymentSheet";
+import type { Payment } from "../lib/payment";
 
 // Le concert choisi survit aux changements d'onglet et aux rechargements.
 const LS_CONCERT = "merch:activeConcert";
@@ -24,6 +26,9 @@ export function SalesTab() {
     try { return localStorage.getItem(LS_CONCERT); } catch { return null; }
   });
   const [seeding, setSeeding] = useState(false);
+  // Article choisi, en attente du mode de paiement. Rien n'est écrit tant que
+  // la feuille n'est pas validée : la fermer annule la vente.
+  const [pendingSale, setPendingSale] = useState<{ family: Family; variant: Variant } | null>(null);
 
   const pickConcert = useCallback((id: string) => {
     setActiveConcertId(id);
@@ -47,6 +52,20 @@ export function SalesTab() {
 
   const totalCents = salesThisConcert.reduce((s, x) => s + x.quantity * x.unit_price_cents, 0);
   const totalItems = salesThisConcert.reduce((s, x) => s + x.quantity, 0);
+
+  // Ce qui doit se trouver dans la caisse, et ce qui est parti sur les comptes.
+  const paymentSplit = useMemo(() => {
+    let cash = 0;
+    let qr = 0;
+    let unknown = 0;
+    for (const s of salesThisConcert) {
+      const amount = s.quantity * s.unit_price_cents;
+      if (s.payment_method === "cash") cash += amount;
+      else if (s.payment_method === "qr") qr += amount;
+      else unknown += amount;
+    }
+    return { cash, qr, unknown };
+  }, [salesThisConcert]);
 
   // PERF : un seul passage sur les ventes pour obtenir « vendus par variante ».
   // Avant, chaque variante refiltrait tout le tableau des ventes à chaque rendu
@@ -94,15 +113,29 @@ export function SalesTab() {
 
   // Identité stable : indispensable pour que le React.memo de ProductCard tienne
   // (cf. useStableCallback). Le corps voit malgré tout toujours l'état à jour.
-  const doAddSale = useStableCallback(async (family: Family, variant: Variant | undefined) => {
+  // Ouvre la feuille de paiement. La vente n'est écrite qu'une fois le mode
+  // choisi, dans confirmPayment.
+  const doAddSale = useStableCallback((family: Family, variant: Variant | undefined) => {
     if (!concert || !variant) return;
     if (concert.is_closed) { toast.error("Concert clôturé"); return; }
     // Les écritures étant optimistes (cf. db.ts), c'est ici qu'on empêche de
     // vendre à découvert plutôt que dans une transaction serveur.
     if (variant.stock <= 0) { toast.error("Stock épuisé"); return; }
+    setPendingSale({ family, variant });
+  });
+
+  const confirmPayment = useStableCallback(async (payment: Payment) => {
+    if (!concert || !pendingSale) return;
+    const { family, variant } = pendingSale;
+    setPendingSale(null);
     navigator.vibrate?.(20);
     try {
-      await recordSale({ concertId: concert.id, variantId: variant.id, priceCents: family.price_cents });
+      await recordSale({
+        concertId: concert.id,
+        variantId: variant.id,
+        priceCents: family.price_cents,
+        payment,
+      });
     } catch (e) { toast.error((e as Error).message); }
   });
 
@@ -191,6 +224,7 @@ export function SalesTab() {
         totalCents={totalCents}
         totalItems={totalItems}
         lowStockCount={lowStockCount}
+        paymentSplit={paymentSplit}
         onTapConcert={() => setConcertPicker(true)}
       />
 
@@ -239,11 +273,28 @@ export function SalesTab() {
           document.body
         )}
 
+      {pendingSale &&
+        createPortal(
+          <PaymentSheet
+            label={saleLabel(pendingSale.family, pendingSale.variant)}
+            priceCents={pendingSale.family.price_cents}
+            onConfirm={confirmPayment}
+            onCancel={() => setPendingSale(null)}
+          />,
+          document.body
+        )}
+
       {newConcertOpen && (
         <NewConcertModal onClose={() => setNewConcertOpen(false)} onCreated={pickConcert} />
       )}
     </div>
   );
+}
+
+/** « T-shirt Boris · Homme L », ou juste le nom pour un article sans taille. */
+function saleLabel(family: Family, variant: Variant): string {
+  const parts = [variant.subcategory, variant.label].filter(Boolean);
+  return parts.length > 0 ? `${family.name} · ${parts.join(" ")}` : family.name;
 }
 
 function VariantPickerModal({

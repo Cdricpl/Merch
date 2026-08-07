@@ -32,4 +32,9 @@ export type Sale = {
   quantity: number;
   unit_price_cents: number;
   created_at: number; // Date.now() — c'est bien un nombre côté Firestore
+  // Optionnels : les ventes enregistrées avant le suivi des paiements n'ont
+  // aucun de ces deux champs. Elles sont comptées à part plutôt que rangées
+  // d'office en cash, ce qui fausserait les comptes sans prévenir.
+  payment_method?: "cash" | "qr";
+  payment_payee?: string | null; // nom du membre pour un QR, null en cash
 };

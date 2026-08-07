@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { ChevronLeft, Plus, Trash2, Lock, RotateCcw } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Lock, RotateCcw, Banknote, QrCode } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
+import { paymentLabel } from "../lib/payment";
 import { deleteConcert, updateConcert } from "../lib/db";
 import { useBackHandler } from "../lib/useBackHandler";
 import type { Concert } from "../lib/types";
@@ -135,6 +136,30 @@ function ConcertDetail({
   const total = mySales.reduce((s, x) => s + x.quantity * x.unit_price_cents, 0);
   const totalItems = mySales.reduce((s, x) => s + x.quantity, 0);
 
+  // Qui détient quoi : le cash est dans la boîte, chaque QR est arrivé sur le
+  // compte d'un membre. C'est ce tableau qui sert à répartir en fin de soirée.
+  const byPayment = useMemo(() => {
+    const rows = new Map<string, { label: string; cents: number; items: number }>();
+    for (const s of mySales) {
+      const key = s.payment_method === "qr" ? `qr:${s.payment_payee ?? ""}` : (s.payment_method ?? "unknown");
+      const cur = rows.get(key) ?? {
+        label: paymentLabel(s.payment_method, s.payment_payee),
+        cents: 0,
+        items: 0,
+      };
+      cur.cents += s.quantity * s.unit_price_cents;
+      cur.items += s.quantity;
+      rows.set(key, cur);
+    }
+    // Cash d'abord, puis les QR par montant décroissant, « non renseigné » en fin.
+    return [...rows.entries()]
+      .sort(([ka, a], [kb, b]) => {
+        const rank = (k: string) => (k === "cash" ? 0 : k === "unknown" ? 2 : 1);
+        return rank(ka) - rank(kb) || b.cents - a.cents;
+      })
+      .map(([key, v]) => ({ key, ...v }));
+  }, [mySales]);
+
   const save = async () => {
     try {
       await updateConcert(concert.id, { name, concert_date: date, notes: notes || null, is_active: active });
@@ -220,6 +245,39 @@ function ConcertDetail({
           className="w-full rounded-xl bg-input border border-border px-3 py-3"
         />
       </div>
+
+      {/* Répartition de l'encaissement */}
+      {byPayment.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs uppercase tracking-widest text-muted-foreground font-semibold px-1">
+            Qui a encaissé
+          </div>
+          <div className="bg-card border border-border/60 rounded-xl divide-y divide-border/40">
+            {byPayment.map((p) => (
+              <div key={p.key} className="flex items-center gap-3 px-3 py-2.5">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                    p.key === "cash"
+                      ? "bg-emerald-600/20 text-emerald-500"
+                      : p.key === "unknown"
+                        ? "bg-muted text-muted-foreground"
+                        : "bg-primary/20 text-primary"
+                  }`}
+                >
+                  {p.key === "cash" ? <Banknote className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm truncate">{p.label}</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {p.items} article{p.items > 1 ? "s" : ""}
+                  </div>
+                </div>
+                <div className="font-display text-lg shrink-0">{formatEUR(p.cents)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Sales breakdown */}
       {grouped.length === 0 ? (

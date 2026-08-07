@@ -1,4 +1,4 @@
-import { AlertTriangle, ShoppingBag } from "lucide-react";
+import { AlertTriangle, Banknote, QrCode, ShoppingBag } from "lucide-react";
 import { formatEUR } from "../lib/format";
 import type { Concert } from "../lib/types";
 
@@ -7,12 +7,15 @@ export function CaisseCard({
   totalCents,
   totalItems,
   lowStockCount,
+  paymentSplit,
   onTapConcert,
 }: {
   concert: Concert;
   totalCents: number;
   totalItems: number;
   lowStockCount: number;
+  /** Répartition en centimes ; `unknown` = ventes antérieures au suivi. */
+  paymentSplit: { cash: number; qr: number; unknown: number };
   onTapConcert: () => void;
 }) {
   const closed = concert.is_closed === true;
@@ -51,6 +54,26 @@ export function CaisseCard({
       <div className="relative px-4 pb-3">
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Caisse</div>
         <div className="font-display text-5xl text-primary leading-none mt-1">{formatEUR(totalCents)}</div>
+
+        {/* Ce qui doit être en espèces dans la boîte, et ce qui est parti en QR. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs">
+          <span className="inline-flex items-center gap-1.5">
+            <Banknote className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            <span className="text-muted-foreground">Cash</span>
+            <span className="font-semibold text-foreground">{formatEUR(paymentSplit.cash)}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <QrCode className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span className="text-muted-foreground">QR</span>
+            <span className="font-semibold text-foreground">{formatEUR(paymentSplit.qr)}</span>
+          </span>
+          {paymentSplit.unknown > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-muted-foreground">Non renseigné</span>
+              <span className="font-semibold text-muted-foreground">{formatEUR(paymentSplit.unknown)}</span>
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Footer stats */}

@@ -1,4 +1,4 @@
-const CACHE = 'ah-merch-v7';
+const CACHE = 'ah-merch-v8';
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
 
 // Les bundles JS/CSS ont un hash dans leur nom : les servir depuis le cache est
@@ -13,11 +13,28 @@ self.addEventListener('install', () => {
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+    await self.clients.claim();
+
+    // Rechargement forcé de toutes les fenêtres déjà ouvertes.
+    //
+    // C'est le service worker qui pilote, et non la page : un appareil resté
+    // sur une ancienne version n'a pas le code qui saurait se recharger tout
+    // seul. En passant par navigate(), la mise à jour s'applique même à ces
+    // clients-là, sans que personne ait à vider quoi que ce soit.
+    //
+    // Les ventes en attente d'envoi survivent : elles sont conservées dans
+    // IndexedDB par Firestore (cf. firebase.ts) et repartent après le
+    // rechargement.
+    const windows = await self.clients.matchAll({ type: 'window' });
+    for (const c of windows) {
+      if (typeof c.navigate === 'function') {
+        try { await c.navigate(c.url); } catch { /* onglet non contrôlé */ }
+      }
+    }
+  })());
 });
 
 self.addEventListener('fetch', (e) => {

@@ -1,29 +1,40 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useStableCallback } from "../lib/useStableCallback";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Plus, X, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
-import { levelFor } from "../lib/stockLevel";
 import { recordSale, undoSale, seedInitialStock } from "../lib/db";
 import { useBackHandler } from "../lib/useBackHandler";
-import type { Family, Variant, Concert, Sale } from "../lib/types";
+import type { Family, Variant, Concert } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
 import { CaisseCard } from "../components/CaisseCard";
 import { ProductCard } from "../components/ProductCard";
+
+// Le concert choisi survit aux changements d'onglet et aux rechargements.
+const LS_CONCERT = "merch:activeConcert";
 
 export function SalesTab() {
   const { families, variants, concerts, sales, loading } = useStore();
   const [pickerFamily, setPickerFamily] = useState<Family | null>(null);
   const [concertPicker, setConcertPicker] = useState(false);
   const [newConcertOpen, setNewConcertOpen] = useState(false);
-  const [activeConcertId, setActiveConcertId] = useState<string | null>(null);
+  const [activeConcertId, setActiveConcertId] = useState<string | null>(() => {
+    try { return localStorage.getItem(LS_CONCERT); } catch { return null; }
+  });
   const [seeding, setSeeding] = useState(false);
+
+  const pickConcert = useCallback((id: string) => {
+    setActiveConcertId(id);
+    try { localStorage.setItem(LS_CONCERT, id); } catch { /* mode privé */ }
+  }, []);
 
   const concert: Concert | null = useMemo(() => {
     if (concerts.length === 0) return null;
     if (activeConcertId) {
-      return concerts.find((c) => c.id === activeConcertId) ?? null;
+      const found = concerts.find((c) => c.id === activeConcertId);
+      if (found) return found;
     }
     const open = concerts.filter((c) => !c.is_closed);
     return open.find((c) => c.is_active) ?? open[0] ?? null;
@@ -37,43 +48,82 @@ export function SalesTab() {
   const totalCents = salesThisConcert.reduce((s, x) => s + x.quantity * x.unit_price_cents, 0);
   const totalItems = salesThisConcert.reduce((s, x) => s + x.quantity, 0);
 
+  // PERF : un seul passage sur les ventes pour obtenir « vendus par variante ».
+  // Avant, chaque variante refiltrait tout le tableau des ventes à chaque rendu
+  // (O(variantes × ventes) et autant de tableaux intermédiaires alloués).
+  const soldByVariant = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of salesThisConcert) {
+      m.set(s.variant_id, (m.get(s.variant_id) ?? 0) + s.quantity);
+    }
+    return m;
+  }, [salesThisConcert]);
+
+  const variantsByFamily = useMemo(() => {
+    const m = new Map<string, Variant[]>();
+    for (const v of variants) {
+      const arr = m.get(v.family_id);
+      if (arr) arr.push(v);
+      else m.set(v.family_id, [v]);
+    }
+    return m;
+  }, [variants]);
+
   const grouped = useMemo(() => {
     return families.map((f) => {
-      const items = variants.filter((v) => v.family_id === f.id);
-      const stock = items.reduce((s, x) => s + x.stock, 0);
-      const sold = items.reduce((total, v) => {
-        return total + salesThisConcert.filter((s) => s.variant_id === v.id).reduce((s, x) => s + x.quantity, 0);
-      }, 0);
-      return { family: f, items, stock, sold };
+      const items = variantsByFamily.get(f.id) ?? [];
+      let stock = 0;
+      let sold = 0;
+      let lowCount = 0;
+      for (const v of items) {
+        stock += v.stock;
+        sold += soldByVariant.get(v.id) ?? 0;
+        if (v.stock <= f.low_alert) lowCount++;
+      }
+      return { family: f, items, stock, sold, lowCount };
     });
-  }, [families, variants, salesThisConcert]);
+  }, [families, variantsByFamily, soldByVariant]);
 
+  // Le total d'une famille (ex. 40 t-shirts toutes tailles confondues) ne passe
+  // jamais sous le seuil d'alerte : on compte donc les TAILLES en alerte, ce qui
+  // reflète réellement ce qu'il faut réassortir.
   const lowStockCount = useMemo(
-    () => grouped.filter(({ family, stock }) => levelFor(stock, family.low_alert) === "critical").length,
+    () => grouped.reduce((n, g) => n + g.lowCount, 0),
     [grouped]
   );
 
-  const doAddSale = async (family: Family, variant: Variant) => {
-    if (!concert) return;
+  // Identité stable : indispensable pour que le React.memo de ProductCard tienne
+  // (cf. useStableCallback). Le corps voit malgré tout toujours l'état à jour.
+  const doAddSale = useStableCallback(async (family: Family, variant: Variant | undefined) => {
+    if (!concert || !variant) return;
     if (concert.is_closed) { toast.error("Concert clôturé"); return; }
-    if (navigator.vibrate) navigator.vibrate(20);
+    // Les écritures étant optimistes (cf. db.ts), c'est ici qu'on empêche de
+    // vendre à découvert plutôt que dans une transaction serveur.
+    if (variant.stock <= 0) { toast.error("Stock épuisé"); return; }
+    navigator.vibrate?.(20);
     try {
       await recordSale({ concertId: concert.id, variantId: variant.id, priceCents: family.price_cents });
     } catch (e) { toast.error((e as Error).message); }
-  };
+  });
 
-  const doRemoveLastSale = async (family: Family, variant?: Variant) => {
+  const doRemoveLastSale = useStableCallback(async (family: Family, variant?: Variant) => {
     if (!concert) return;
-    // If a specific variant is given, undo that. Otherwise pick the most recent sale of ANY variant in the family.
-    const familyVariantIds = variants.filter((v) => v.family_id === family.id).map((v) => v.id);
-    const candidates = salesThisConcert
-      .filter((s) => (variant ? s.variant_id === variant.id : familyVariantIds.includes(s.variant_id)))
-      .sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
-    const last = candidates[0];
+    // `sales` arrive déjà trié par created_at décroissant : le premier match est
+    // donc la vente la plus récente, sans re-trier.
+    let last;
+    if (variant) {
+      last = salesThisConcert.find((s) => s.variant_id === variant.id);
+    } else {
+      const ids = new Set((variantsByFamily.get(family.id) ?? []).map((v) => v.id));
+      last = salesThisConcert.find((s) => ids.has(s.variant_id));
+    }
     if (!last) return;
-    if (navigator.vibrate) navigator.vibrate(50);
-    try { await undoSale(last.id); } catch (e) { toast.error((e as Error).message); }
-  };
+    navigator.vibrate?.(50);
+    try { await undoSale(last.id, last.variant_id, last.quantity ?? 1); }
+    catch (e) { toast.error((e as Error).message); }
+  });
+
+  const openPicker = useStableCallback((f: Family) => setPickerFamily(f));
 
   const doSeed = async () => {
     setSeeding(true);
@@ -128,7 +178,7 @@ export function SalesTab() {
           Nouveau concert
         </button>
         {newConcertOpen && (
-          <NewConcertModal onClose={() => setNewConcertOpen(false)} onCreated={(id) => setActiveConcertId(id)} />
+          <NewConcertModal onClose={() => setNewConcertOpen(false)} onCreated={pickConcert} />
         )}
       </div>
     );
@@ -149,16 +199,17 @@ export function SalesTab() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {grouped.map(({ family, items, stock, sold }) => (
+        {grouped.map(({ family, items, stock, sold, lowCount }) => (
           <ProductCard
             key={family.id}
             family={family}
             variants={items}
             stock={stock}
             sold={sold}
-            onAdd={() => doAddSale(family, items[0])}
-            onRemove={() => doRemoveLastSale(family)}
-            onOpenPicker={() => setPickerFamily(family)}
+            lowCount={lowCount}
+            onAdd={doAddSale}
+            onRemove={doRemoveLastSale}
+            onOpenPicker={openPicker}
           />
         ))}
       </div>
@@ -167,8 +218,8 @@ export function SalesTab() {
         createPortal(
           <VariantPickerModal
             family={pickerFamily}
-            variants={variants.filter((v) => v.family_id === pickerFamily.id)}
-            sales={salesThisConcert}
+            variants={variantsByFamily.get(pickerFamily.id) ?? []}
+            soldByVariant={soldByVariant}
             onAdd={(v) => doAddSale(pickerFamily, v)}
             onRemove={(v) => doRemoveLastSale(pickerFamily, v)}
             onClose={() => setPickerFamily(null)}
@@ -181,7 +232,7 @@ export function SalesTab() {
           <ConcertPickerModal
             concerts={concerts}
             currentId={concert.id}
-            onPick={(id) => { setActiveConcertId(id); setConcertPicker(false); }}
+            onPick={(id) => { pickConcert(id); setConcertPicker(false); }}
             onNew={() => { setConcertPicker(false); setNewConcertOpen(true); }}
             onClose={() => setConcertPicker(false)}
           />,
@@ -189,36 +240,41 @@ export function SalesTab() {
         )}
 
       {newConcertOpen && (
-        <NewConcertModal onClose={() => setNewConcertOpen(false)} onCreated={(id) => setActiveConcertId(id)} />
+        <NewConcertModal onClose={() => setNewConcertOpen(false)} onCreated={pickConcert} />
       )}
     </div>
   );
 }
 
 function VariantPickerModal({
-  family, variants, sales, onAdd, onRemove, onClose,
+  family, variants, soldByVariant, onAdd, onRemove, onClose,
 }: {
   family: Family;
   variants: Variant[];
-  sales: Sale[];
+  soldByVariant: Map<string, number>;
   onAdd: (v: Variant) => void;
   onRemove: (v: Variant) => void;
   onClose: () => void;
 }) {
-  const countFor = (id: string) =>
-    sales.filter((s) => s.variant_id === id).reduce((s, x) => s + x.quantity, 0);
+  const countFor = (id: string) => soldByVariant.get(id) ?? 0;
 
   // Group variants by subcategory (preserving sort_order-based array order)
-  const groups: Array<{ subcategory: string | null; items: Variant[] }> = [];
-  const seen = new Map<string, Variant[]>();
-  for (const v of variants) {
-    const key = v.subcategory ?? "";
-    if (!seen.has(key)) {
-      seen.set(key, []);
-      groups.push({ subcategory: v.subcategory ?? null, items: seen.get(key)! });
+  const groups = useMemo(() => {
+    const out: Array<{ subcategory: string | null; items: Variant[] }> = [];
+    const seen = new Map<string, Variant[]>();
+    for (const v of variants) {
+      const key = v.subcategory ?? "";
+      let bucket = seen.get(key);
+      if (!bucket) {
+        bucket = [];
+        seen.set(key, bucket);
+        out.push({ subcategory: v.subcategory ?? null, items: bucket });
+      }
+      bucket.push(v);
     }
-    seen.get(key)!.push(v);
-  }
+    return out;
+  }, [variants]);
+
   const subGroups = groups.filter((g) => g.subcategory !== null);
   const hasSub = subGroups.length > 0;
 
@@ -279,7 +335,7 @@ function VariantPickerModal({
         {hasSub && pickedSub === null && (
           <div className="space-y-3">
             {subGroups.map((g) => {
-              const stock = g.items.reduce((s, v) => s + v.stock, 0);
+              const stock = Math.max(0, g.items.reduce((s, v) => s + v.stock, 0));
               const sold = soldForGroup(g.items);
               return (
                 <button
@@ -311,7 +367,7 @@ function VariantPickerModal({
                   <div className="flex-1 min-w-0">
                     <div className="font-display text-2xl">{v.label ?? "—"}</div>
                     <div className="text-[11px] text-muted-foreground">
-                      stock <span className={lowStock ? "text-destructive font-semibold" : ""}>{v.stock}</span>
+                      stock <span className={lowStock ? "text-destructive font-semibold" : ""}>{Math.max(0, v.stock)}</span>
                       {count > 0 && <> · vendus {count}</>}
                     </div>
                   </div>

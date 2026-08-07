@@ -69,7 +69,7 @@ export function CaisseCard({
           <span className={`font-semibold ${lowStockCount > 0 ? "text-destructive" : "text-muted-foreground"}`}>
             {lowStockCount}
           </span>
-          <span className="text-muted-foreground">article{lowStockCount > 1 ? "s" : ""} faible{lowStockCount > 1 ? "s" : ""}</span>
+          <span className="text-muted-foreground">en alerte</span>
         </div>
       </div>
     </div>

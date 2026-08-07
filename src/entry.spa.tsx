@@ -1,6 +1,9 @@
 import "./styles.css";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+// Doit être importé avant le rendu : capture `beforeinstallprompt`, qui est
+// souvent émis avant que React ne soit monté.
+import "./lib/pwaInstall";
 
 // Global error surface for debugging on mobile (no devtools available)
 function showError(label: string, err: unknown) {

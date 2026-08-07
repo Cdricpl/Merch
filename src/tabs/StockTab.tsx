@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -41,10 +41,23 @@ export function StockTab() {
     }
   }
 
-  const grouped = families.map((f) => ({
-    family: f,
-    items: variants.filter((v) => v.family_id === f.id),
-  }));
+  const grouped = useMemo(() => {
+    const byFamily = new Map<string, Variant[]>();
+    for (const v of variants) {
+      const arr = byFamily.get(v.family_id);
+      if (arr) arr.push(v);
+      else byFamily.set(v.family_id, [v]);
+    }
+    return families.map((f) => {
+      const items = byFamily.get(f.id) ?? [];
+      return {
+        family: f,
+        items,
+        total: items.reduce((s, x) => s + x.stock, 0),
+        lowCount: items.reduce((n, x) => n + (x.stock <= f.low_alert ? 1 : 0), 0),
+      };
+    });
+  }, [families, variants]);
 
   return (
     <div className="px-4 pt-4 space-y-3 pb-4">
@@ -60,8 +73,7 @@ export function StockTab() {
       </div>
 
       <div className="space-y-2">
-        {grouped.map(({ family, items }) => {
-          const total = items.reduce((s, x) => s + x.stock, 0);
+        {grouped.map(({ family, items, total, lowCount }) => {
           const { category, display } = parseName(family.name);
           return (
             <button
@@ -81,7 +93,7 @@ export function StockTab() {
                   {formatEUR(family.price_cents)} · {items.length} taille{items.length > 1 ? "s" : ""}
                 </div>
               </div>
-              <StockBadge stock={total} alert={family.low_alert} />
+              <StockBadge stock={total} alert={family.low_alert} lowCount={lowCount} />
               <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </button>
           );

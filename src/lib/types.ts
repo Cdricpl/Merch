@@ -31,5 +31,5 @@ export type Sale = {
   variant_id: string;
   quantity: number;
   unit_price_cents: number;
-  created_at: string;
+  created_at: number; // Date.now() — c'est bien un nombre côté Firestore
 };

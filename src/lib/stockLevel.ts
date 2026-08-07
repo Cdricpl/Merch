@@ -13,6 +13,15 @@ export function levelFor(stock: number, alert: number): StockLevel {
   return "ok";
 }
 
+// Niveau d'une famille entière. Le total cumulé (ex. 40 t-shirts toutes tailles)
+// ne descend jamais sous le seuil, alors qu'une taille à 1 doit alerter : dès
+// qu'une variante est en alerte, la famille l'est aussi.
+export function familyLevel(totalStock: number, lowVariantCount: number, alert: number): StockLevel {
+  if (totalStock <= 0) return "empty";
+  if (lowVariantCount > 0) return "critical";
+  return levelFor(totalStock, alert);
+}
+
 export function levelBg(l: StockLevel): string {
   switch (l) {
     case "empty":    return "bg-muted text-muted-foreground";

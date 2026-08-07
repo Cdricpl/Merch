@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LOGO_URL } from "../lib/assets";
 
 // ⚠️ Change ce mot de passe puis re-deploy pour le changer partout.
 // C'est un simple verrou d'entrée, pas une vraie protection cryptographique.
@@ -35,7 +36,7 @@ export function PasscodeGate({ children }: { children: React.ReactNode }) {
       <form onSubmit={submit} className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
           <img
-            src={import.meta.env.BASE_URL + "logo.png"}
+            src={LOGO_URL}
             alt="Ardenne Heavy"
             className="mx-auto h-20 w-auto object-contain"
           />

@@ -3,8 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDocs,
-  runTransaction,
+  increment,
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
@@ -18,6 +17,7 @@ export async function createConcert(name: string, dateISO: string): Promise<stri
     name,
     concert_date: dateISO,
     is_active: true,
+    is_closed: false,
     notes: null,
     created_at: Date.now(),
   });
@@ -96,78 +96,51 @@ export async function deleteVariant(id: string) {
 }
 
 export async function replenishVariant(id: string, add: number) {
-  await runTransaction(db, async (t) => {
-    const ref = doc(db, "variants", id);
-    const s = await t.get(ref);
-    const cur = (s.data()?.stock as number) ?? 0;
-    t.update(ref, { stock: cur + Math.max(0, add) });
-  });
+  await updateDoc(doc(db, "variants", id), { stock: increment(Math.max(0, add)) });
 }
 
-// -------- Sales (transactional : decrement stock atomically) --------
+// -------- Sales --------
+//
+// PERF / OFFLINE : on utilise volontairement des écritures classiques avec
+// increment() plutôt qu'une runTransaction(). Une transaction Firestore exige
+// un aller-retour serveur AVANT d'être appliquée — le compteur ne bougeait donc
+// qu'après la réponse réseau (plusieurs centaines de ms en 4G de salle, et rien
+// du tout hors ligne). Un writeBatch + increment() est appliqué immédiatement au
+// cache local : onSnapshot se déclenche dans la foulée, l'UI répond au doigt, et
+// l'écriture est rejouée automatiquement quand le réseau revient.
+//
+// Contrepartie assumée : deux téléphones qui vendent la dernière pièce exactement
+// en même temps peuvent faire passer le stock à -1. L'appelant vérifie le stock
+// local avant d'appeler, et l'affichage borne à 0.
 
 export async function recordSale(params: {
   concertId: string;
   variantId: string;
   priceCents: number;
 }) {
-  await runTransaction(db, async (t) => {
-    const vRef = doc(db, "variants", params.variantId);
-    const v = await t.get(vRef);
-    if (!v.exists()) throw new Error("variante introuvable");
-    const stock = (v.data()?.stock as number) ?? 0;
-    if (stock <= 0) throw new Error("Stock épuisé");
-    t.update(vRef, { stock: stock - 1 });
-    t.set(doc(collection(db, "sales")), {
-      concert_id: params.concertId,
-      variant_id: params.variantId,
-      quantity: 1,
-      unit_price_cents: params.priceCents,
-      created_at: Date.now(),
-    });
+  const batch = writeBatch(db);
+  batch.update(doc(db, "variants", params.variantId), { stock: increment(-1) });
+  batch.set(doc(collection(db, "sales")), {
+    concert_id: params.concertId,
+    variant_id: params.variantId,
+    quantity: 1,
+    unit_price_cents: params.priceCents,
+    created_at: Date.now(),
   });
+  await batch.commit();
 }
 
-export async function undoSale(saleId: string) {
-  await runTransaction(db, async (t) => {
-    const sRef = doc(db, "sales", saleId);
-    const s = await t.get(sRef);
-    if (!s.exists()) return;
-    const data = s.data() as { variant_id: string; quantity: number };
-    const vRef = doc(db, "variants", data.variant_id);
-    const v = await t.get(vRef);
-    const cur = (v.data()?.stock as number) ?? 0;
-    t.update(vRef, { stock: cur + (data.quantity ?? 1) });
-    t.delete(sRef);
-  });
-}
-
-// -------- Reset : delete everything (danger) --------
-
-export async function resetAllData() {
-  const cols = ["sales", "variants", "families", "concerts"];
-  for (const c of cols) {
-    const snap = await getDocs(collection(db, c));
-    // chunk deletes at 400 per batch (Firestore batch limit is 500)
-    let batch = writeBatch(db);
-    let n = 0;
-    for (const d of snap.docs) {
-      batch.delete(d.ref);
-      n++;
-      if (n === 400) {
-        await batch.commit();
-        batch = writeBatch(db);
-        n = 0;
-      }
-    }
-    if (n > 0) await batch.commit();
-  }
+export async function undoSale(saleId: string, variantId: string, quantity = 1) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, "variants", variantId), { stock: increment(quantity) });
+  batch.delete(doc(db, "sales", saleId));
+  await batch.commit();
 }
 
 // -------- Initial seed (only usable when store is empty) --------
 //
-// T-shirts sont désormais UNIFIÉS : une seule famille par modèle, avec
-// des variantes (subcategory: "Homme"|"Femme", label: "S"|"M"|...).
+// T-shirts sont UNIFIÉS : une seule famille par modèle, avec des variantes
+// (subcategory: "Homme"|"Femme", label: "S"|"M"|...).
 // Les CDs restent des familles à variante unique (label=null, sans subcategory).
 
 export async function seedInitialStock() {
@@ -203,20 +176,15 @@ export async function seedInitialStock() {
     });
   };
 
-  // Helpers pour créer toutes les tailles d'un T-shirt d'un coup.
   // Femme = S, M, L, XL. Homme = S, M, L, XL, 2XL.
   // Toutes les tailles sont créées, même à 0.
   const HOMME_SIZES = ["S", "M", "L", "XL", "2XL"] as const;
   const FEMME_SIZES = ["S", "M", "L", "XL"] as const;
   const mkHomme = (fid: string, stocks: Partial<Record<(typeof HOMME_SIZES)[number], number>>) => {
-    HOMME_SIZES.forEach((s, i) => {
-      mkVar(fid, "Homme", s, stocks[s] ?? 0, 100 + i * 10);
-    });
+    HOMME_SIZES.forEach((s, i) => mkVar(fid, "Homme", s, stocks[s] ?? 0, 100 + i * 10));
   };
   const mkFemme = (fid: string, stocks: Partial<Record<(typeof FEMME_SIZES)[number], number>>) => {
-    FEMME_SIZES.forEach((s, i) => {
-      mkVar(fid, "Femme", s, stocks[s] ?? 0, 200 + i * 10);
-    });
+    FEMME_SIZES.forEach((s, i) => mkVar(fid, "Femme", s, stocks[s] ?? 0, 200 + i * 10));
   };
 
   // CDs — pas de subcategory, pas de label

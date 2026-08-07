@@ -1,5 +1,10 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
 
 // Config injected at build-time via VITE_FIREBASE_CONFIG (JSON string).
 // Set this as a GitHub Actions secret. See README-FIREBASE.md for the setup.
@@ -34,4 +39,19 @@ if (missing.length > 0) {
 }
 
 const app = initializeApp(config);
-export const db = getFirestore(app);
+
+// Persistance IndexedDB : les ventes saisies sans réseau (sous-sol de salle,
+// 4G saturée) restent en file d'attente et partent toutes seules au retour de
+// la connexion, même si l'app a été fermée entre-temps. Sans ça, le cache n'est
+// qu'en mémoire et un rechargement perdait les écritures en attente.
+export const db = (() => {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch {
+    // Navigateur sans IndexedDB (mode privé sur certains Safari) : on retombe
+    // sur le cache mémoire, l'app reste pleinement utilisable en ligne.
+    return getFirestore(app);
+  }
+})();

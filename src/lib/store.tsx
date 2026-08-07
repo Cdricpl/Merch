@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db } from "./firebase";
 import type { Family, Variant, Concert, Sale } from "./types";
@@ -9,32 +9,39 @@ type Store = {
   concerts: Concert[];
   sales: Sale[];
   loading: boolean;
-  seeded: boolean;
 };
 
 const Ctx = createContext<Store | null>(null);
 
-const LS_KEY = "merch:cache:v3";
+// PERF : un cache par collection, et non un seul gros blob.
+// `families` porte les images en base64 (~50-80 kB pièce) : les sérialiser à
+// chaque vente bloquait le thread principal plusieurs dizaines de ms. Avec des
+// clés séparées, une vente ne réécrit que `variants` et `sales` (quelques kB),
+// et jamais les images.
+const LS_PREFIX = "merch:v4:";
 
-type Cache = {
-  families: Family[];
-  variants: Variant[];
-  concerts: Concert[];
-  sales: Sale[];
-};
-
-function readCache(): Cache {
+function readCache<T>(name: string): T[] {
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return { families: [], variants: [], concerts: [], sales: [] };
-    return JSON.parse(raw) as Cache;
+    const raw = localStorage.getItem(LS_PREFIX + name);
+    return raw ? (JSON.parse(raw) as T[]) : [];
   } catch {
-    return { families: [], variants: [], concerts: [], sales: [] };
+    return [];
   }
 }
 
-function writeCache(cache: Cache) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(cache)); } catch {}
+// Écriture différée : une rafale de snapshots Firestore (écriture locale
+// optimiste puis confirmation serveur) se réduit à une seule sérialisation.
+function useDeferredCache<T>(name: string, rows: T[]) {
+  useEffect(() => {
+    const id = setTimeout(() => {
+      try {
+        localStorage.setItem(LS_PREFIX + name, JSON.stringify(rows));
+      } catch {
+        /* quota dépassé — le cache n'est qu'un confort hors-ligne */
+      }
+    }, 800);
+    return () => clearTimeout(id);
+  }, [name, rows]);
 }
 
 // Firestore returns document snapshots — convert to our typed shape (id + data).
@@ -43,18 +50,16 @@ function toRows<T>(snap: { docs: { id: string; data(): unknown }[] }): T[] {
 }
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const initial = readCache();
-  const [families, setFamilies] = useState<Family[]>(initial.families);
-  const [variants, setVariants] = useState<Variant[]>(initial.variants);
-  const [concerts, setConcerts] = useState<Concert[]>(initial.concerts);
-  const [sales, setSales] = useState<Sale[]>(initial.sales);
+  const [families, setFamilies] = useState<Family[]>(() => readCache<Family>("families"));
+  const [variants, setVariants] = useState<Variant[]>(() => readCache<Variant>("variants"));
+  const [concerts, setConcerts] = useState<Concert[]>(() => readCache<Concert>("concerts"));
+  const [sales, setSales] = useState<Sale[]>(() => readCache<Sale>("sales"));
   const [loadCount, setLoadCount] = useState(0); // increments as each snapshot lands
 
-  const cacheRef = useRef<Cache>(initial);
-  useEffect(() => {
-    cacheRef.current = { families, variants, concerts, sales };
-    writeCache(cacheRef.current);
-  }, [families, variants, concerts, sales]);
+  useDeferredCache("families", families);
+  useDeferredCache("variants", variants);
+  useDeferredCache("concerts", concerts);
+  useDeferredCache("sales", sales);
 
   useEffect(() => {
     const bumpOnce = () => setLoadCount((n) => Math.min(n + 1, 4));
@@ -80,10 +85,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loading = loadCount < 4 && families.length === 0;
-  const seeded = families.length > 0;
 
   return (
-    <Ctx.Provider value={{ families, variants, concerts, sales, loading, seeded }}>
+    <Ctx.Provider value={{ families, variants, concerts, sales, loading }}>
       {children}
     </Ctx.Provider>
   );

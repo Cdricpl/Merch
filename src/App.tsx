@@ -6,6 +6,8 @@ import { SalesTab } from "./tabs/SalesTab";
 import { StockTab } from "./tabs/StockTab";
 import { ConcertsTab } from "./tabs/ConcertsTab";
 import { PasscodeGate } from "./components/PasscodeGate";
+import { InstallPrompt } from "./components/InstallPrompt";
+import { LOGO_URL } from "./lib/assets";
 
 type Tab = "sales" | "stock" | "concerts";
 
@@ -28,6 +30,7 @@ export default function App() {
     <PasscodeGate>
       <StoreProvider>
         <Shell />
+        <InstallPrompt />
         <Toaster theme="dark" position="top-center" richColors />
       </StoreProvider>
     </PasscodeGate>
@@ -41,7 +44,7 @@ function Shell() {
     <div className="min-h-[100dvh] flex flex-col bg-background">
       <header className="px-4 pt-4 pb-2 flex items-center justify-between shrink-0">
         <img
-          src={import.meta.env.BASE_URL + "logo.png"}
+          src={LOGO_URL}
           alt="Ardenne Heavy"
           className="h-9 w-auto object-contain"
         />

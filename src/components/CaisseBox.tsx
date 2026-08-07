@@ -3,30 +3,20 @@ import { formatEUR } from "../lib/format";
 import type { CaisseState } from "../lib/caisse";
 
 /**
- * Ce que la boîte doit contenir, et le détail qui y mène.
+ * Ce que la boîte doit contenir.
  *
- * Le détail compte autant que le total : quand le compte physique ne tombe pas
- * juste, c'est en relisant ces lignes qu'on trouve où ça coince. Chaque ligne
- * nulle disparaît pour ne pas noyer les trois qui comptent.
+ * Un seul chiffre, sans le détail qui y mène. Il reste calculé de la même
+ * façon — ventes en liquide, cachet en liquide et remises, moins les dépenses,
+ * plus le report du dernier comptage — mais l'écran n'affiche que le résultat.
+ *
+ * Restent deux mentions, qui ne détaillent pas le total mais le complètent :
+ * ce que les membres détiennent encore, qui n'est PAS dans la boîte, et les
+ * vieilles ventes sans moyen de paiement, qui n'y sont pas comptées.
  */
 export function CaisseBox({ state, title = "État de la caisse" }: {
   state: CaisseState;
   title?: string;
 }) {
-  const rows: Array<{ label: string; cents: number; sign: "+" | "−" }> = [];
-  if (state.cashSales !== 0) rows.push({ label: "Ventes en liquide", cents: state.cashSales, sign: "+" });
-  if (state.feeCash !== 0) rows.push({ label: "Cachet en liquide", cents: state.feeCash, sign: "+" });
-  // Ce qui était dans la boîte avant l'app, plus l'écart des comptages. En faire
-  // une ligne visible plutôt qu'un total corrigé en douce : c'est la seule façon
-  // de comprendre pourquoi la somme des soirées ne fait pas le total.
-  if (state.adjust !== 0) {
-    rows.push({
-      label: "Report du dernier comptage",
-      cents: Math.abs(state.adjust),
-      sign: state.adjust < 0 ? "−" : "+",
-    });
-  }
-
   return (
     <div className="card-surface rounded-2xl p-4">
       <div className="flex items-center gap-2">
@@ -37,20 +27,6 @@ export function CaisseBox({ state, title = "État de la caisse" }: {
       <div className="font-display text-[2.5rem] text-primary leading-none mt-2">
         {formatEUR(state.inBox)}
       </div>
-
-      {rows.length > 0 && (
-        <div className="mt-3 space-y-1 border-t border-border pt-2.5">
-          {rows.map((r) => (
-            <div key={r.label} className="flex items-center justify-between text-[13px]">
-              <span className="text-muted-foreground">{r.label}</span>
-              <span className={r.sign === "−" ? "text-destructive" : ""}>
-                {r.sign === "−" ? "−" : "+"}
-                {formatEUR(r.cents)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
 
       {state.owed > 0 && (
         <div className="mt-3 rounded-xl bg-warn/10 border border-warn/30 px-3 py-2">

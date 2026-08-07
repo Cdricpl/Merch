@@ -21,7 +21,9 @@ async function hardRefresh() {
       const regs = await navigator.serviceWorker.getRegistrations();
       await Promise.all(regs.map((r) => r.unregister()));
     }
-  } catch {}
+  } catch {
+    // Purge best-effort : si le navigateur refuse, le rechargement suffit souvent.
+  }
   window.location.reload();
 }
 

@@ -23,7 +23,7 @@ export function PasscodeGate({ children }: { children: React.ReactNode }) {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (value.trim().toLowerCase() === PASSCODE.toLowerCase()) {
-      try { localStorage.setItem(LS_KEY, "1"); } catch {}
+      try { localStorage.setItem(LS_KEY, "1"); } catch { /* mode privé : il faudra ressaisir le code */ }
       setOk(true);
     } else {
       setError(true);

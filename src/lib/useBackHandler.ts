@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 // Handler stack for the phone's hardware back button (or browser back).
 // Pattern: each mounted layer (modal, detail view, sub-step) pushes an entry
@@ -28,8 +28,14 @@ function ensureListener() {
 }
 
 export function useBackHandler(active: boolean, onBack: () => void) {
+  // Mise à jour dans un effet de layout plutôt que pendant le rendu : un rendu
+  // concurrent peut être abandonné, et y écrire la ref laisserait une version
+  // jamais validée. L'effet passe avant la peinture, donc bien avant qu'un
+  // appui sur « retour » puisse survenir.
   const cbRef = useRef(onBack);
-  cbRef.current = onBack;
+  useLayoutEffect(() => {
+    cbRef.current = onBack;
+  });
 
   useEffect(() => {
     if (!active) return;

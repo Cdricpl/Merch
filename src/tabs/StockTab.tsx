@@ -24,40 +24,56 @@ export function StockTab() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
-  if (openId) {
-    const f = families.find((x) => x.id === openId);
-    if (f) {
-      return (
-        <FamilyDetail
-          family={f}
-          variants={variants.filter((v) => v.family_id === f.id)}
-          saleIds={sales
-            .filter((s) => variants.some((v) => v.family_id === f.id && v.id === s.variant_id))
-            .map((s) => s.id)}
-          onBack={() => setOpenId(null)}
-          onDeleted={() => setOpenId(null)}
-        />
-      );
-    }
-  }
-
-  const grouped = useMemo(() => {
-    const byFamily = new Map<string, Variant[]>();
+  // ⚠️ Tous les hooks doivent rester AVANT le retour anticipé du détail produit :
+  // un hook appelé seulement dans la vue liste change le nombre de hooks entre
+  // les deux rendus, ce que React refuse (erreur #300).
+  const variantsByFamily = useMemo(() => {
+    const m = new Map<string, Variant[]>();
     for (const v of variants) {
-      const arr = byFamily.get(v.family_id);
+      const arr = m.get(v.family_id);
       if (arr) arr.push(v);
-      else byFamily.set(v.family_id, [v]);
+      else m.set(v.family_id, [v]);
     }
-    return families.map((f) => {
-      const items = byFamily.get(f.id) ?? [];
-      return {
-        family: f,
-        items,
-        total: items.reduce((s, x) => s + x.stock, 0),
-        lowCount: items.reduce((n, x) => n + (x.stock <= f.low_alert ? 1 : 0), 0),
-      };
-    });
-  }, [families, variants]);
+    return m;
+  }, [variants]);
+
+  const grouped = useMemo(
+    () =>
+      families.map((f) => {
+        const items = variantsByFamily.get(f.id) ?? [];
+        return {
+          family: f,
+          items,
+          total: items.reduce((s, x) => s + x.stock, 0),
+          lowCount: items.reduce((n, x) => n + (x.stock <= f.low_alert ? 1 : 0), 0),
+        };
+      }),
+    [families, variantsByFamily]
+  );
+
+  const openFamily = openId ? families.find((x) => x.id === openId) : undefined;
+
+  const openFamilyVariants = useMemo(
+    () => variantsByFamily.get(openId ?? "") ?? [],
+    [variantsByFamily, openId]
+  );
+  const openFamilySaleIds = useMemo(() => {
+    if (!openFamily) return [];
+    const ids = new Set(openFamilyVariants.map((v) => v.id));
+    return sales.filter((s) => ids.has(s.variant_id)).map((s) => s.id);
+  }, [openFamily, openFamilyVariants, sales]);
+
+  if (openFamily) {
+    return (
+      <FamilyDetail
+        family={openFamily}
+        variants={openFamilyVariants}
+        saleIds={openFamilySaleIds}
+        onBack={() => setOpenId(null)}
+        onDeleted={() => setOpenId(null)}
+      />
+    );
+  }
 
   return (
     <div className="px-4 pt-4 space-y-3 pb-4">

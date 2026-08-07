@@ -22,6 +22,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Bloque notamment les hooks appelés après un return conditionnel, qui ne
+      # se manifestent qu'en production minifiée (React #300, écran rouge).
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Build SPA for GitHub Pages
         run: npm run build:pages
         env:

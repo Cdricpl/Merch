@@ -13,6 +13,13 @@ import { useBackHandler } from "../lib/useBackHandler";
 import { CaisseBox } from "../components/CaisseBox";
 import type { Concert, Expense } from "../lib/types";
 
+// Support du panier « rattaché à aucun concert ». Sans cachet, il n'apporte
+// rien de lui-même : il ne sert qu'à faire passer les lignes orphelines par le
+// même calcul que les autres.
+const NO_CONCERT: Concert = {
+  id: "", name: "", concert_date: "", is_active: false, notes: null,
+};
+
 /**
  * L'écran de l'argent : ce que la boîte devrait contenir, qui doit encore
  * quelque chose, et ce qui est sorti.
@@ -26,35 +33,44 @@ export function CaisseTab() {
 
   // Un seul passage sur chaque collection pour répartir les lignes par concert,
   // plutôt qu'un filtre complet par concert (qui serait quadratique).
-  const perConcert = useMemo(() => {
+  //
+  // Tout ce qui ne retombe sur aucun concert connu va dans un panier à part :
+  // une dépense sans concert, mais aussi une ligne dont le concert a été
+  // supprimé. Sans lui, cet argent n'était visité par personne et s'évaporait
+  // du total sans un mot.
+  const { rows, orphan } = useMemo(() => {
+    const known = new Set(concerts.map((c) => c.id));
     const salesBy = new Map<string, typeof sales>();
+    const expBy = new Map<string, typeof expenses>();
+    const setBy = new Map<string, typeof settlements>();
+    const looseSales: typeof sales = [];
+    const looseExpenses: typeof expenses = [];
+    const looseSettlements: typeof settlements = [];
+
     for (const s of sales) {
+      if (!known.has(s.concert_id)) { looseSales.push(s); continue; }
       const a = salesBy.get(s.concert_id);
       if (a) a.push(s); else salesBy.set(s.concert_id, [s]);
     }
-    const expBy = new Map<string, typeof expenses>();
     for (const e of expenses) {
-      if (!e.concert_id) continue;
+      if (!e.concert_id || !known.has(e.concert_id)) { looseExpenses.push(e); continue; }
       const a = expBy.get(e.concert_id);
       if (a) a.push(e); else expBy.set(e.concert_id, [e]);
     }
-    const setBy = new Map<string, typeof settlements>();
     for (const r of settlements) {
+      if (!known.has(r.concert_id)) { looseSettlements.push(r); continue; }
       const a = setBy.get(r.concert_id);
       if (a) a.push(r); else setBy.set(r.concert_id, [r]);
     }
-    return concerts.map((c) => ({
-      concert: c,
-      state: caisseFor(c, salesBy.get(c.id) ?? [], expBy.get(c.id) ?? [], setBy.get(c.id) ?? []),
-    }));
-  }, [concerts, sales, expenses, settlements]);
 
-  // Les dépenses saisies sans concert : elles ne figurent dans aucun état de
-  // soirée, il faut donc les retrancher du total à part.
-  const looseExpenses = useMemo(
-    () => expenses.reduce((n, e) => (e.concert_id ? n : n + e.amount_cents), 0),
-    [expenses]
-  );
+    return {
+      rows: concerts.map((c) => ({
+        concert: c,
+        state: caisseFor(c, salesBy.get(c.id) ?? [], expBy.get(c.id) ?? [], setBy.get(c.id) ?? []),
+      })),
+      orphan: caisseFor(NO_CONCERT, looseSales, looseExpenses, looseSettlements),
+    };
+  }, [concerts, sales, expenses, settlements]);
 
   // Seul le comptage le plus récent s'applique ; les précédents restent comme
   // historique. La liste arrive déjà triée du plus récent au plus ancien.
@@ -62,8 +78,8 @@ export function CaisseTab() {
   const lastCheck = caisseChecks[0];
 
   const total = useMemo(
-    () => caisseTotal(perConcert.map((r) => r.state), adjust, looseExpenses),
-    [perConcert, adjust, looseExpenses]
+    () => caisseTotal([...rows.map((r) => r.state), orphan], adjust),
+    [rows, orphan, adjust]
   );
 
   // Ce que l'app compterait sans le report : c'est cette valeur que le prochain
@@ -95,7 +111,7 @@ export function CaisseTab() {
         </p>
       )}
 
-      <MemberDebts total={total} perConcert={perConcert} />
+      <MemberDebts total={total} perConcert={rows} />
 
       <ExpenseList expenses={expenses} concerts={concerts} />
 
@@ -142,7 +158,13 @@ function MemberDebts({
           : null;
       })
       .filter((x): x is { concertId: string; payee: string; amountCents: number } => x !== null);
-    if (entries.length === 0) return;
+    if (entries.length === 0) {
+      // Le dû ne vient que de ventes dont le concert a disparu : il n'y a plus
+      // de fiche où inscrire la remise. Le dire vaut mieux qu'un bouton qui ne
+      // fait rien.
+      toast.error("Ce solde vient d'un concert supprimé : impossible de l'enregistrer.");
+      return;
+    }
     const sum = entries.reduce((n, e) => n + e.amountCents, 0);
     try {
       const ids = await createSettlements(entries);

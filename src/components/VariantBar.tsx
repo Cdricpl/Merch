@@ -13,7 +13,10 @@ export function VariantBar({
   onClick?: () => void;
 }) {
   const l = levelFor(variant.stock);
-  const pct = maxStock <= 0 ? 0 : Math.min(100, Math.round((variant.stock / maxStock) * 100));
+  // Borné en bas aussi : un stock négatif (deux ventes simultanées de la
+  // dernière pièce) produisait une largeur négative, donc une règle CSS
+  // invalide et une jauge pleine.
+  const pct = maxStock <= 0 ? 0 : Math.max(0, Math.min(100, Math.round((variant.stock / maxStock) * 100)));
 
   return (
     <button

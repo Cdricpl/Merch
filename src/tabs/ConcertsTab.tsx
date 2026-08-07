@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  ChevronLeft, Plus, Trash2, Lock, RotateCcw, Banknote, QrCode, Wallet,
+  ChevronLeft, Plus, Trash2, Lock, RotateCcw, Banknote, QrCode, Wallet, Package,
 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
@@ -144,6 +144,12 @@ function ConcertDetail({
   const totalItems = mySales.reduce((s, x) => s + x.quantity, 0);
   const totalDiscount = mySales.reduce((s, x) => s + (x.discount_cents ?? 0), 0);
 
+  // Supprimer une taille ne supprime pas ses ventes : celles-ci ne retombent
+  // alors sur aucune ligne du détail, et l'argent vendu disparaissait de
+  // l'écran tout en restant dans le total. On le remonte sur une ligne à part
+  // plutôt que de le laisser s'évaporer.
+  const orphanCents = total - grouped.reduce((s, r) => s + r.total, 0);
+
 
   const save = async () => {
     try {
@@ -245,7 +251,7 @@ function ConcertDetail({
       <FeeEditor concert={concert} />
 
       {/* Sales breakdown */}
-      {grouped.length === 0 ? (
+      {grouped.length === 0 && orphanCents === 0 ? (
         <div className="text-center text-sm text-muted-foreground py-6">Aucune vente pour ce concert.</div>
       ) : (
         <div className="space-y-3">
@@ -277,6 +283,25 @@ function ConcertDetail({
               </div>
             </div>
           ))}
+
+          {/* Ventes dont l'article n'existe plus. Sans cette ligne, elles
+              comptaient dans le total sans apparaître nulle part. */}
+          {orphanCents !== 0 && (
+            <div className="card-surface rounded-2xl flex items-center gap-3 p-3">
+              <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center shrink-0">
+                <Package className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-display text-base text-muted-foreground truncate">
+                  Articles supprimés
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  vendus, puis retirés du stock
+                </div>
+              </div>
+              <div className="font-display text-lg">{formatEUR(orphanCents)}</div>
+            </div>
+          )}
         </div>
       )}
 

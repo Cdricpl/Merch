@@ -2,7 +2,7 @@ import { Component, useState, type ReactNode } from "react";
 import { ShoppingCart, Flame, Boxes } from "lucide-react";
 import { Toaster } from "sonner";
 import { StoreProvider, useStore } from "./lib/store";
-import { ActiveConcertProvider, useActiveConcert } from "./lib/activeConcert";
+import { ActiveConcertProvider } from "./lib/activeConcert";
 import { SalesTab } from "./tabs/SalesTab";
 import { StockTab } from "./tabs/StockTab";
 import { ConcertsTab } from "./tabs/ConcertsTab";
@@ -88,7 +88,6 @@ function Shell() {
   const [tab, setTab] = useState<Tab>("sales");
   const [stockKey, setStockKey] = useState(0);
   const { degraded } = useStore();
-  const { concert } = useActiveConcert();
 
   // Revenir sur Stock le remonte (la clé change) : on retrouve la liste en haut
   // plutôt que la fiche produit ouverte la fois d'avant.
@@ -101,33 +100,25 @@ function Shell() {
           entier qui défile — et la barre d'onglets part hors de l'écran. */}
       <div className="h-full max-w-[560px] mx-auto flex flex-col relative overflow-hidden sm:border-x sm:border-border">
         <header className="px-4 pt-[max(0.875rem,env(safe-area-inset-top))] pb-3 shrink-0">
-          {/* Rien que le logo, centré. Le bandeau de reconnexion se pose
-              par-dessus, à droite, pour ne pas décaler le centrage. */}
-          <div className="relative flex items-center justify-center">
+          {/* Le logo et le numéro de version, rien d'autre : le concert en cours
+              s'affiche sur la carte Caisse, là où on le consulte vraiment. Le
+              bandeau de reconnexion se pose par-dessus, à droite, pour ne pas
+              décaler le centrage. */}
+          <div className="relative flex flex-col items-center">
             <img src={LOGO_URL} alt="Ardenne Heavy" className="h-10 w-auto object-contain" />
+            <span className="text-[9px] tracking-[0.2em] text-muted-foreground mt-1 leading-none">
+              {__APP_VERSION__}
+            </span>
 
             {/* Dire que la connexion se rétablit vaut mieux que laisser croire
                 que l'app est figée : les chiffres affichés sont justes, ils
                 rattrapent simplement leur retard. */}
             {degraded && (
-              <span className="absolute right-0 inset-y-0 my-auto h-5 text-[10px] leading-5 text-warn bg-warn/10 px-2 rounded-full">
+              <span className="absolute right-0 top-0 h-5 text-[10px] leading-5 text-warn bg-warn/10 px-2 rounded-full">
                 Reconnexion…
               </span>
             )}
           </div>
-
-          {concert && (
-            <div className="mt-2 text-center">
-              <div className="font-display text-[16px] leading-none text-primary truncate">
-                {concert.name}
-              </div>
-              <div className="text-[10.5px] uppercase tracking-wider text-muted-foreground mt-1">
-                {new Date(concert.concert_date).toLocaleDateString("fr-BE", {
-                  day: "2-digit", month: "long", year: "numeric",
-                })}
-              </div>
-            </div>
-          )}
         </header>
 
         <main className="flex-1 overflow-y-auto">

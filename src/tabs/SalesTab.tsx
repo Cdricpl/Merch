@@ -6,6 +6,7 @@ import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import { levelFor } from "../lib/stockLevel";
 import { recordSale, undoSale, seedInitialStock } from "../lib/db";
+import { useBackHandler } from "../lib/useBackHandler";
 import type { Family, Variant, Concert, Sale } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
 import { CaisseCard } from "../components/CaisseCard";
@@ -225,6 +226,12 @@ function VariantPickerModal({
   // Si un seul groupe (pas de sous-catégorie), on skip directement.
   const [pickedSub, setPickedSub] = useState<string | null>(hasSub ? null : (groups[0]?.subcategory ?? ""));
 
+  // Back button du téléphone :
+  // - Base : ferme le picker (fait toujours partie du picker mounted)
+  // - Étape 2 (pickedSub set alors que hasSub) : revient à l'étape 1
+  useBackHandler(true, onClose);
+  useBackHandler(hasSub && pickedSub !== null, () => setPickedSub(null));
+
   const currentGroup = pickedSub === null
     ? null
     : (groups.find((g) => (g.subcategory ?? "") === pickedSub) ?? null);
@@ -341,6 +348,7 @@ function ConcertPickerModal({
   onNew: () => void;
   onClose: () => void;
 }) {
+  useBackHandler(true, onClose);
   return (
     <div className="fixed inset-0 bg-black/70 z-[100] flex items-end backdrop-blur-sm" onClick={onClose}>
       <div

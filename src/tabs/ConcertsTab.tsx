@@ -5,6 +5,7 @@ import { ChevronLeft, Plus, Trash2, Lock, RotateCcw } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import { deleteConcert, updateConcert } from "../lib/db";
+import { useBackHandler } from "../lib/useBackHandler";
 import type { Concert } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
 import { ConcertCard } from "../components/ConcertCard";
@@ -94,6 +95,8 @@ function ConcertDetail({
   const [notes, setNotes] = useState(concert.notes ?? "");
   const [active, setActive] = useState(concert.is_active);
   const closed = concert.is_closed === true;
+
+  useBackHandler(true, onBack);
 
   const mySales = useMemo(() => sales.filter((s) => s.concert_id === concert.id), [sales, concert.id]);
 

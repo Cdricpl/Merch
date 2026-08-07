@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -11,11 +11,12 @@ import { levelFor, levelText } from "../lib/stockLevel";
 import { parseName } from "../lib/category";
 import {
   createFamily, createVariant, deleteFamily, deleteVariant,
-  replenishVariant, resetAllData, updateFamily, updateVariant,
+  replenishVariant, updateFamily, updateVariant,
 } from "../lib/db";
 import { fileToCompressedDataUrl } from "../lib/image";
 import { StockBadge } from "../components/StockBadge";
 import { VariantBar } from "../components/VariantBar";
+import { useBackHandler } from "../lib/useBackHandler";
 import type { Family, Variant } from "../lib/types";
 
 export function StockTab() {
@@ -95,26 +96,6 @@ export function StockTab() {
 
       {addOpen &&
         createPortal(<AddFamilyModal onClose={() => setAddOpen(false)} />, document.body)}
-
-      {grouped.length > 0 && (
-        <div className="pt-6 pb-2 flex justify-center">
-          <button
-            onClick={async () => {
-              if (!confirm("Supprimer TOUS les produits, tailles, concerts et ventes ? Cette action est irréversible.")) return;
-              if (!confirm("Vraiment sûr ? Deuxième confirmation.")) return;
-              try {
-                await resetAllData();
-                toast.success("Base de données réinitialisée");
-              } catch (e) {
-                toast.error((e as Error).message);
-              }
-            }}
-            className="text-xs text-muted-foreground/60"
-          >
-            Réinitialiser toutes les données
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -133,6 +114,8 @@ function FamilyDetail({
   const [uploadingImg, setUploadingImg] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useBackHandler(true, onBack);
 
   const total = variants.reduce((s, x) => s + x.stock, 0);
   const maxStock = variants.reduce((m, x) => Math.max(m, x.stock), 0);
@@ -429,6 +412,7 @@ function ReplenishModal({
 }) {
   const [n, setN] = useState("10");
   const [busy, setBusy] = useState(false);
+  useBackHandler(true, onClose);
 
   const submit = async () => {
     const add = parseInt(n || "0");
@@ -493,6 +477,7 @@ function AddFamilyModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("20");
   const [busy, setBusy] = useState(false);
+  useBackHandler(true, onClose);
 
   const create = async () => {
     if (!name.trim()) return;
@@ -555,6 +540,7 @@ function AddVariantModal({
   const [label, setLabel] = useState("");
   const [stock, setStock] = useState("0");
   const [busy, setBusy] = useState(false);
+  useBackHandler(true, onClose);
 
   const create = async () => {
     setBusy(true);

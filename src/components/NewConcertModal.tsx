@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { createConcert } from "../lib/db";
+import { useBackHandler } from "../lib/useBackHandler";
 
 export function NewConcertModal({
   onClose,
@@ -13,6 +14,7 @@ export function NewConcertModal({
   const [name, setName] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
+  useBackHandler(true, onClose);
 
   const create = async () => {
     if (!name.trim()) return;

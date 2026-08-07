@@ -1,4 +1,4 @@
-const CACHE = 'ah-merch-v5';
+const CACHE = 'ah-merch-v6';
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
 
 self.addEventListener('install', () => {

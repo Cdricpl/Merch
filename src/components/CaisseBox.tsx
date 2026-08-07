@@ -16,7 +16,6 @@ export function CaisseBox({ state, title = "État de la caisse" }: {
   const rows: Array<{ label: string; cents: number; sign: "+" | "−" }> = [];
   if (state.cashSales !== 0) rows.push({ label: "Ventes en liquide", cents: state.cashSales, sign: "+" });
   if (state.feeCash !== 0) rows.push({ label: "Cachet en liquide", cents: state.feeCash, sign: "+" });
-  if (state.expenses !== 0) rows.push({ label: "Dépenses", cents: state.expenses, sign: "−" });
   // Ce qui était dans la boîte avant l'app, plus l'écart des comptages. En faire
   // une ligne visible plutôt qu'un total corrigé en douce : c'est la seule façon
   // de comprendre pourquoi la somme des soirées ne fait pas le total.
@@ -37,9 +36,6 @@ export function CaisseBox({ state, title = "État de la caisse" }: {
 
       <div className="font-display text-[2.5rem] text-primary leading-none mt-2">
         {formatEUR(state.inBox)}
-      </div>
-      <div className="text-[11px] text-muted-foreground mt-1.5">
-        ce que la boîte devrait contenir
       </div>
 
       {rows.length > 0 && (

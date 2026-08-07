@@ -1,9 +1,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import {
-  ArrowDownLeft, Check, ClipboardCheck, Plus, QrCode, Trash2, Undo2, X,
-} from "lucide-react";
+import { ArrowDownLeft, ClipboardCheck, Plus, QrCode, Trash2, X } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import { caisseFor, caisseTotal, type CaisseState } from "../lib/caisse";
@@ -13,7 +11,7 @@ import {
 } from "../lib/db";
 import { useBackHandler } from "../lib/useBackHandler";
 import { CaisseBox } from "../components/CaisseBox";
-import type { Concert, Expense, Settlement } from "../lib/types";
+import type { Concert, Expense } from "../lib/types";
 
 /**
  * L'écran de l'argent : ce que la boîte devrait contenir, qui doit encore
@@ -97,7 +95,7 @@ export function CaisseTab() {
         </p>
       )}
 
-      <MemberDebts total={total} perConcert={perConcert} settlements={settlements} />
+      <MemberDebts total={total} perConcert={perConcert} />
 
       <ExpenseList expenses={expenses} concerts={concerts} />
 
@@ -121,15 +119,19 @@ export function CaisseTab() {
  * soirée serait absurde — il rend tout d'un coup —, donc le bouton règle son
  * total et écrit dans l'ombre une ligne par concert concerné, ce qui garde le
  * détail juste.
+ *
+ * Un membre soldé quitte la liste : il n'y reste que ce qui appelle une action.
+ * L'annulation part donc avec lui, et se rattrape dans la notification — sans
+ * quoi une erreur de tap serait sans retour.
  */
 function MemberDebts({
-  total, perConcert, settlements,
+  total, perConcert,
 }: {
   total: CaisseState;
   perConcert: Array<{ concert: Concert; state: CaisseState }>;
-  settlements: Settlement[];
 }) {
-  if (total.debts.length === 0) return null;
+  const owing = total.debts.filter((d) => d.remaining > 0);
+  if (owing.length === 0) return null;
 
   const settle = async (payee: string) => {
     const entries = perConcert
@@ -141,22 +143,17 @@ function MemberDebts({
       })
       .filter((x): x is { concertId: string; payee: string; amountCents: number } => x !== null);
     if (entries.length === 0) return;
+    const sum = entries.reduce((n, e) => n + e.amountCents, 0);
     try {
-      await createSettlements(entries);
-      const sum = entries.reduce((n, e) => n + e.amountCents, 0);
-      toast.success(`${payee} a remis ${formatEUR(sum)}`);
-    } catch (e) { toast.error((e as Error).message); }
-  };
-
-  const unsettle = async (payee: string) => {
-    const mine = settlements.filter((r) => r.payee === payee);
-    if (mine.length === 0) return;
-    // Défaire le geste entier, pas seulement sa dernière ligne : solder un
-    // membre a pu en écrire plusieurs, toutes au même instant.
-    const latest = Math.max(...mine.map((r) => r.created_at));
-    try {
-      await deleteSettlements(mine.filter((r) => r.created_at === latest).map((r) => r.id));
-      toast.success("Remise annulée");
+      const ids = await createSettlements(entries);
+      toast.success(`${payee} a remis ${formatEUR(sum)}`, {
+        action: {
+          label: "Annuler",
+          onClick: () => {
+            deleteSettlements(ids).catch((e) => toast.error((e as Error).message));
+          },
+        },
+      });
     } catch (e) { toast.error((e as Error).message); }
   };
 
@@ -166,43 +163,27 @@ function MemberDebts({
         Encaissé par les membres
       </div>
       <div className="card-surface rounded-2xl divide-y divide-border">
-        {total.debts.map((d) => {
-          const done = d.remaining <= 0;
-          return (
-            <div key={d.payee} className="flex items-center gap-3 px-3 py-2.5">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                  done ? "bg-ok/20 text-ok" : "bg-warn/20 text-warn"
-                }`}
-              >
-                {done ? <Check className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm truncate">{d.payee}</div>
-                <div className="text-[11px] text-muted-foreground">
-                  encaissé {formatEUR(d.collected)}
-                  {d.settled > 0 && <> · remis {formatEUR(d.settled)}</>}
-                </div>
-              </div>
-              {done ? (
-                <button
-                  onClick={() => unsettle(d.payee)}
-                  className="shrink-0 inline-flex items-center gap-1 text-[11px] text-muted-foreground px-2 py-2 active:text-destructive"
-                >
-                  <Undo2 className="h-3.5 w-3.5" /> Annuler
-                </button>
-              ) : (
-                <button
-                  onClick={() => settle(d.payee)}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg btn-primary text-[12px] font-semibold px-3 py-2 active:scale-95 transition"
-                >
-                  <ArrowDownLeft className="h-3.5 w-3.5" />
-                  Remis {formatEUR(d.remaining)}
-                </button>
-              )}
+        {owing.map((d) => (
+          <div key={d.payee} className="flex items-center gap-3 px-3 py-2.5">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-warn/20 text-warn">
+              <QrCode className="h-4 w-4" />
             </div>
-          );
-        })}
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm truncate">{d.payee}</div>
+              <div className="text-[11px] text-muted-foreground">
+                encaissé {formatEUR(d.collected)}
+                {d.settled > 0 && <> · remis {formatEUR(d.settled)}</>}
+              </div>
+            </div>
+            <button
+              onClick={() => settle(d.payee)}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg btn-primary text-[12px] font-semibold px-3 py-2 active:scale-95 transition"
+            >
+              <ArrowDownLeft className="h-3.5 w-3.5" />
+              Remis {formatEUR(d.remaining)}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -218,6 +199,11 @@ function ExpenseList({ expenses, concerts }: { expenses: Expense[]; concerts: Co
     const m = new Map(concerts.map((c) => [c.id, c.name]));
     return (id: string | null) => (id ? m.get(id) ?? null : null);
   }, [concerts]);
+
+  // La liste arrive triée du plus récent au plus ancien : les cinq dernières
+  // suffisent à vérifier ce qu'on vient de saisir, le reste encombrerait.
+  const shown = expenses.slice(0, 5);
+  const hidden = expenses.length - shown.length;
 
   const add = async () => {
     const cents = Math.round(parseFloat(amount.replace(",", ".") || "0") * 100);
@@ -242,9 +228,9 @@ function ExpenseList({ expenses, concerts }: { expenses: Expense[]; concerts: Co
     <div className="space-y-2">
       <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Dépenses</div>
 
-      {expenses.length > 0 && (
+      {shown.length > 0 && (
         <div className="card-surface rounded-2xl divide-y divide-border">
-          {expenses.map((e) => {
+          {shown.map((e) => {
             const concert = nameOf(e.concert_id);
             return (
               <div key={e.id} className="flex items-center gap-3 px-3 py-2.5">
@@ -266,6 +252,11 @@ function ExpenseList({ expenses, concerts }: { expenses: Expense[]; concerts: Co
             );
           })}
         </div>
+      )}
+      {hidden > 0 && (
+        <p className="text-[11px] text-muted-foreground px-1">
+          + {hidden} dépense{hidden > 1 ? "s" : ""} plus ancienne{hidden > 1 ? "s" : ""}, toujours comptée{hidden > 1 ? "s" : ""} dans le total.
+        </p>
       )}
 
       <div className="flex gap-2">

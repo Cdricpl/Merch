@@ -80,12 +80,18 @@ export async function deleteExpense(id: string) {
  */
 export async function createSettlements(
   entries: Array<{ concertId: string; payee: string; amountCents: number }>,
-) {
-  if (entries.length === 0) return;
+): Promise<string[]> {
+  if (entries.length === 0) return [];
   const now = Date.now();
   const batch = writeBatch(db);
+  // Les identifiants sont générés côté client, donc connus avant même l'envoi :
+  // c'est ce qui permet de proposer « Annuler » dans la foulée, y compris hors
+  // ligne.
+  const ids: string[] = [];
   for (const e of entries) {
-    batch.set(doc(collection(db, "settlements")), {
+    const ref = doc(collection(db, "settlements"));
+    ids.push(ref.id);
+    batch.set(ref, {
       concert_id: e.concertId,
       payee: e.payee,
       amount_cents: Math.round(e.amountCents),
@@ -93,6 +99,7 @@ export async function createSettlements(
     });
   }
   await batch.commit();
+  return ids;
 }
 
 export async function deleteSettlements(ids: string[]) {

@@ -11,7 +11,7 @@ import { levelFor, levelText } from "../lib/stockLevel";
 import { parseName } from "../lib/category";
 import {
   createFamily, createVariant, deleteFamily, deleteVariant,
-  replenishVariant, updateFamily, updateVariant,
+  replenishVariant, resetAllData, updateFamily, updateVariant,
 } from "../lib/db";
 import { fileToCompressedDataUrl } from "../lib/image";
 import { StockBadge } from "../components/StockBadge";
@@ -95,6 +95,26 @@ export function StockTab() {
 
       {addOpen &&
         createPortal(<AddFamilyModal onClose={() => setAddOpen(false)} />, document.body)}
+
+      {grouped.length > 0 && (
+        <div className="pt-6 pb-2 flex justify-center">
+          <button
+            onClick={async () => {
+              if (!confirm("Supprimer TOUS les produits, tailles, concerts et ventes ? Cette action est irréversible.")) return;
+              if (!confirm("Vraiment sûr ? Deuxième confirmation.")) return;
+              try {
+                await resetAllData();
+                toast.success("Base de données réinitialisée");
+              } catch (e) {
+                toast.error((e as Error).message);
+              }
+            }}
+            className="text-xs text-muted-foreground/60"
+          >
+            Réinitialiser toutes les données
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -208,7 +228,9 @@ function FamilyDetail({
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{category}</div>
           )}
           <div className="font-display text-xl leading-tight">{display}</div>
-          <div className="text-primary font-display text-lg mt-1">{formatEUR(family.price_cents)}</div>
+          {!editMode && (
+            <div className="text-primary font-display text-lg mt-1">{formatEUR(family.price_cents)}</div>
+          )}
         </div>
         <div className="text-right">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Total</div>
@@ -216,9 +238,11 @@ function FamilyDetail({
         </div>
       </div>
 
-      <div className="text-[11px] text-muted-foreground -mt-2">
-        Alerte à <span className={`${levelText(level)} font-semibold`}>{family.low_alert}</span>
-      </div>
+      {!editMode && (
+        <div className="text-[11px] text-muted-foreground -mt-2">
+          Alerte à <span className={`${levelText(level)} font-semibold`}>{family.low_alert}</span>
+        </div>
+      )}
 
       {/* Image editor (only in edit mode) */}
       {editMode && (
@@ -277,68 +301,92 @@ function FamilyDetail({
         </div>
       )}
 
-      {/* Variants */}
-      <div className="space-y-2">
-        <div className="text-xs uppercase tracking-widest text-muted-foreground font-semibold px-1">Par taille</div>
-        <div className="bg-card border border-border/60 rounded-xl divide-y divide-border/40">
-          {variants.map((v) => (
-            <div key={v.id} className="flex items-center gap-2 px-2 py-1">
-              <div className="flex-1">
-                <VariantBar variant={v} alert={family.low_alert} maxStock={Math.max(1, maxStock)} />
-              </div>
-              {editMode && (
-                <div className="flex items-center gap-1 pr-1">
-                  <button
-                    onClick={() => bumpStock(v, -1)}
-                    disabled={v.stock <= 0}
-                    aria-label="Retirer 1"
-                    className="w-8 h-8 rounded-md border border-border flex items-center justify-center active:scale-90 disabled:opacity-30"
-                  >
-                    <Minus className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => bumpStock(v, 1)}
-                    aria-label="Ajouter 1"
-                    className="w-8 h-8 rounded-md border border-border flex items-center justify-center active:scale-90"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => setReplenishFor(v)}
-                    aria-label="Réapprovisionner"
-                    className="px-2 h-8 rounded-md bg-primary text-primary-foreground text-xs font-semibold active:scale-90"
-                  >
-                    +N
-                  </button>
-                  <button
-                    onClick={() => removeVariant(v)}
-                    aria-label="Supprimer la taille"
-                    className="w-8 h-8 flex items-center justify-center text-muted-foreground"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+      {/* Variants grouped by subcategory */}
+      {(() => {
+        const groups: Array<{ subcategory: string | null; items: Variant[] }> = [];
+        const seen = new Map<string, Variant[]>();
+        for (const v of variants) {
+          const key = v.subcategory ?? "";
+          if (!seen.has(key)) {
+            seen.set(key, []);
+            groups.push({ subcategory: v.subcategory ?? null, items: seen.get(key)! });
+          }
+          seen.get(key)!.push(v);
+        }
+        return (
+          <div className="space-y-3">
+            {groups.map((g) => (
+              <div key={g.subcategory ?? "_flat"} className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <div className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                    {g.subcategory ?? "Par taille"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {g.items.reduce((s, v) => s + v.stock, 0)} en stock
+                  </div>
                 </div>
-              )}
-              {!editMode && (
-                <button
-                  onClick={() => setReplenishFor(v)}
-                  className="px-3 h-8 rounded-md bg-primary/15 text-primary text-xs font-semibold active:scale-90 mr-1"
-                >
-                  +N
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        {editMode && (
-          <button
-            onClick={() => setAddVariantOpen(true)}
-            className="w-full text-sm text-muted-foreground py-2 rounded-md border border-dashed border-border inline-flex items-center justify-center gap-1"
-          >
-            <Plus className="h-3 w-3" /> Ajouter une taille
-          </button>
-        )}
-      </div>
+                <div className="bg-card border border-border/60 rounded-xl divide-y divide-border/40">
+                  {g.items.map((v) => (
+                    <div key={v.id} className="flex items-center gap-2 px-2 py-1">
+                      <div className="flex-1">
+                        <VariantBar variant={v} alert={family.low_alert} maxStock={Math.max(1, maxStock)} />
+                      </div>
+                      {editMode ? (
+                        <div className="flex items-center gap-1 pr-1">
+                          <button
+                            onClick={() => bumpStock(v, -1)}
+                            disabled={v.stock <= 0}
+                            aria-label="Retirer 1"
+                            className="w-8 h-8 rounded-md border border-border flex items-center justify-center active:scale-90 disabled:opacity-30"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => bumpStock(v, 1)}
+                            aria-label="Ajouter 1"
+                            className="w-8 h-8 rounded-md border border-border flex items-center justify-center active:scale-90"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => setReplenishFor(v)}
+                            aria-label="Réapprovisionner"
+                            className="px-2 h-8 rounded-md bg-primary text-primary-foreground text-xs font-semibold active:scale-90"
+                          >
+                            +N
+                          </button>
+                          <button
+                            onClick={() => removeVariant(v)}
+                            aria-label="Supprimer la taille"
+                            className="w-8 h-8 flex items-center justify-center text-muted-foreground"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setReplenishFor(v)}
+                          className="px-3 h-8 rounded-md bg-primary/15 text-primary text-xs font-semibold active:scale-90 mr-1"
+                        >
+                          +N
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {editMode && (
+              <button
+                onClick={() => setAddVariantOpen(true)}
+                className="w-full text-sm text-muted-foreground py-2 rounded-md border border-dashed border-border inline-flex items-center justify-center gap-1"
+              >
+                <Plus className="h-3 w-3" /> Ajouter une taille
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {editMode && (
         <button
@@ -363,6 +411,7 @@ function FamilyDetail({
         createPortal(
           <AddVariantModal
             familyId={family.id}
+            subcategories={Array.from(new Set(variants.map((v) => v.subcategory).filter((s): s is string => !!s)))}
             onClose={() => setAddVariantOpen(false)}
           />,
           document.body
@@ -495,11 +544,14 @@ function AddFamilyModal({ onClose }: { onClose: () => void }) {
 }
 
 function AddVariantModal({
-  familyId, onClose,
+  familyId, onClose, subcategories,
 }: {
   familyId: string;
   onClose: () => void;
+  subcategories: string[];
 }) {
+  const [subcategory, setSubcategory] = useState<string>(subcategories[0] ?? "");
+  const [customSub, setCustomSub] = useState("");
   const [label, setLabel] = useState("");
   const [stock, setStock] = useState("0");
   const [busy, setBusy] = useState(false);
@@ -507,7 +559,13 @@ function AddVariantModal({
   const create = async () => {
     setBusy(true);
     try {
-      await createVariant(familyId, label.trim() || null, parseInt(stock || "0"));
+      const sub = (customSub.trim() || subcategory.trim()) || null;
+      await createVariant(
+        familyId,
+        label.trim() || null,
+        parseInt(stock || "0"),
+        sub,
+      );
       onClose();
     } catch (e) {
       toast.error((e as Error).message);
@@ -523,13 +581,40 @@ function AddVariantModal({
       >
         <div className="w-10 h-1 rounded-full bg-muted mx-auto" />
         <h2 className="font-display text-xl">Nouvelle taille</h2>
+
+        {subcategories.length > 0 && (
+          <label className="block">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Sous-catégorie</div>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {subcategories.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => { setSubcategory(s); setCustomSub(""); }}
+                  className={`px-3 py-1.5 rounded-md text-sm ${!customSub && subcategory === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </label>
+        )}
         <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="Ex : XL, 2XL, ou vide"
-          className="w-full rounded-xl bg-input border border-border px-3 py-3"
-          autoFocus
+          value={customSub}
+          onChange={(e) => setCustomSub(e.target.value)}
+          placeholder={subcategories.length > 0 ? "…ou nouvelle sous-catégorie" : "Sous-catégorie (Homme, Femme… vide si aucune)"}
+          className="w-full rounded-xl bg-input border border-border px-3 py-2 text-sm"
         />
+
+        <label className="block">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Taille</div>
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Ex : S, M, L, XL, 2XL, ou vide"
+            className="w-full rounded-xl bg-input border border-border px-3 py-3"
+          />
+        </label>
         <label className="block">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Stock initial</div>
           <input

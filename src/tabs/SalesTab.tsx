@@ -143,14 +143,8 @@ export function SalesTab() {
         onTapConcert={() => setConcertPicker(true)}
       />
 
-      <div className="flex items-center justify-between px-1">
+      <div className="px-1">
         <h2 className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Produits</h2>
-        <button
-          onClick={() => toast.info("Va dans l'onglet Stock pour ajouter un produit.")}
-          className="text-xs text-primary inline-flex items-center gap-1"
-        >
-          <Plus className="h-3 w-3" /> Ajouter
-        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -213,59 +207,84 @@ function VariantPickerModal({
   const countFor = (id: string) =>
     sales.filter((s) => s.variant_id === id).reduce((s, x) => s + x.quantity, 0);
 
+  // Group variants by subcategory (preserving sort_order-based array order)
+  const groups: Array<{ subcategory: string | null; items: Variant[] }> = [];
+  const seen = new Map<string, Variant[]>();
+  for (const v of variants) {
+    const key = v.subcategory ?? "";
+    if (!seen.has(key)) {
+      seen.set(key, []);
+      groups.push({ subcategory: v.subcategory ?? null, items: seen.get(key)! });
+    }
+    seen.get(key)!.push(v);
+  }
+  const hasSub = groups.some((g) => g.subcategory !== null);
+
   return (
     <div className="fixed inset-0 bg-black/70 z-[100] flex items-end backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full bg-card border-t border-border rounded-t-3xl p-4 max-h-[80vh] overflow-y-auto"
+        className="w-full bg-card border-t border-border rounded-t-3xl p-4 max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
         <div className="w-10 h-1 rounded-full bg-muted mx-auto mb-3" />
         <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-14 h-14 rounded-xl bg-muted overflow-hidden shrink-0">
               {family.image && <img src={family.image} alt="" className="w-full h-full object-cover" />}
             </div>
-            <div>
-              <h2 className="font-display text-lg text-primary leading-tight">{family.name}</h2>
+            <div className="min-w-0">
+              <h2 className="font-display text-lg text-primary leading-tight truncate">{family.name}</h2>
               <p className="text-xs text-muted-foreground">{formatEUR(family.price_cents)} pièce</p>
             </div>
           </div>
-          <button onClick={onClose} aria-label="Fermer" className="p-2 -mr-2 text-muted-foreground">
+          <button onClick={onClose} aria-label="Fermer" className="p-2 -mr-2 text-muted-foreground shrink-0">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <ul className="space-y-2">
-          {variants.map((v) => {
-            const count = countFor(v.id);
-            const lowStock = v.stock <= family.low_alert;
-            return (
-              <li key={v.id} className="flex items-center gap-3 bg-muted/50 rounded-xl p-2.5">
-                <div className="flex-1 min-w-0">
-                  <div className="font-display text-2xl">{v.label ?? "—"}</div>
-                  <div className="text-[11px] text-muted-foreground">
-                    stock <span className={lowStock ? "text-destructive font-semibold" : ""}>{v.stock}</span>
-                    {count > 0 && <> · vendus {count}</>}
-                  </div>
+
+        <div className="space-y-4">
+          {groups.map((g) => (
+            <div key={g.subcategory ?? "_"} className="space-y-2">
+              {hasSub && g.subcategory && (
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-1">
+                  {g.subcategory}
                 </div>
-                <button
-                  onClick={() => onRemove(v)}
-                  disabled={count === 0}
-                  className="w-11 h-11 rounded-full border border-border flex items-center justify-center active:scale-90 transition disabled:opacity-30"
-                >
-                  <span className="text-xl leading-none">−</span>
-                </button>
-                <button
-                  onClick={() => onAdd(v)}
-                  disabled={v.stock <= 0}
-                  className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center active:scale-90 transition disabled:opacity-30"
-                >
-                  <Plus className="h-5 w-5" />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+              )}
+              <ul className="space-y-2">
+                {g.items.map((v) => {
+                  const count = countFor(v.id);
+                  const lowStock = v.stock <= family.low_alert;
+                  return (
+                    <li key={v.id} className="flex items-center gap-3 bg-muted/50 rounded-xl p-2.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-display text-2xl">{v.label ?? "—"}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          stock <span className={lowStock ? "text-destructive font-semibold" : ""}>{v.stock}</span>
+                          {count > 0 && <> · vendus {count}</>}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => onRemove(v)}
+                        disabled={count === 0}
+                        className="w-11 h-11 rounded-full border border-border flex items-center justify-center active:scale-90 transition disabled:opacity-30"
+                      >
+                        <span className="text-xl leading-none">−</span>
+                      </button>
+                      <button
+                        onClick={() => onAdd(v)}
+                        disabled={v.stock <= 0}
+                        className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center active:scale-90 transition disabled:opacity-30"
+                      >
+                        <Plus className="h-5 w-5" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

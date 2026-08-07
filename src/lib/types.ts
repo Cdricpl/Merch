@@ -10,7 +10,8 @@ export type Family = {
 export type Variant = {
   id: string;
   family_id: string;
-  label: string | null;
+  subcategory?: string | null; // e.g. "Homme", "Femme" — optional secondary dimension
+  label: string | null;        // e.g. "S", "M", "2XL", or NULL for single-variant items
   stock: number;
   sort_order: number;
 };

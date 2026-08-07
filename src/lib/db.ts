@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   runTransaction,
   updateDoc,
   writeBatch,
@@ -13,21 +14,19 @@ import type { Family, Variant } from "./types";
 // -------- Concerts --------
 
 export async function createConcert(name: string, dateISO: string): Promise<string> {
-  // Deactivate existing active concerts (only one active at a time)
-  const now = Date.now();
   const ref = await addDoc(collection(db, "concerts"), {
     name,
     concert_date: dateISO,
     is_active: true,
     notes: null,
-    created_at: now,
+    created_at: Date.now(),
   });
   return ref.id;
 }
 
 export async function updateConcert(
   id: string,
-  patch: { name?: string; concert_date?: string; is_active?: boolean; notes?: string | null }
+  patch: { name?: string; concert_date?: string; is_active?: boolean; is_closed?: boolean; notes?: string | null }
 ) {
   await updateDoc(doc(db, "concerts", id), patch);
 }
@@ -49,9 +48,9 @@ export async function createFamily(name: string, priceCents: number): Promise<st
     sort_order: 200,
     created_at: Date.now(),
   });
-  // Create a default variantless entry so the product is immediately sellable
   await addDoc(collection(db, "variants"), {
     family_id: ref.id,
+    subcategory: null,
     label: null,
     stock: 0,
     sort_order: 10,
@@ -72,9 +71,15 @@ export async function deleteFamily(id: string, variantIds: string[], saleIds: st
   await batch.commit();
 }
 
-export async function createVariant(familyId: string, label: string | null, stock: number) {
+export async function createVariant(
+  familyId: string,
+  label: string | null,
+  stock: number,
+  subcategory: string | null = null,
+) {
   await addDoc(collection(db, "variants"), {
     family_id: familyId,
+    subcategory,
     label,
     stock: Math.max(0, stock),
     sort_order: 100,
@@ -137,7 +142,33 @@ export async function undoSale(saleId: string) {
   });
 }
 
+// -------- Reset : delete everything (danger) --------
+
+export async function resetAllData() {
+  const cols = ["sales", "variants", "families", "concerts"];
+  for (const c of cols) {
+    const snap = await getDocs(collection(db, c));
+    // chunk deletes at 400 per batch (Firestore batch limit is 500)
+    let batch = writeBatch(db);
+    let n = 0;
+    for (const d of snap.docs) {
+      batch.delete(d.ref);
+      n++;
+      if (n === 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        n = 0;
+      }
+    }
+    if (n > 0) await batch.commit();
+  }
+}
+
 // -------- Initial seed (only usable when store is empty) --------
+//
+// T-shirts sont désormais UNIFIÉS : une seule famille par modèle, avec
+// des variantes (subcategory: "Homme"|"Femme", label: "S"|"M"|...).
+// Les CDs restent des familles à variante unique (label=null, sans subcategory).
 
 export async function seedInitialStock() {
   const now = Date.now();
@@ -155,9 +186,16 @@ export async function seedInitialStock() {
     return ref.id;
   };
 
-  const mkVar = (fid: string, label: string | null, stock: number, sort: number) => {
+  const mkVar = (
+    fid: string,
+    subcategory: string | null,
+    label: string | null,
+    stock: number,
+    sort: number,
+  ) => {
     batch.set(doc(collection(db, "variants")), {
       family_id: fid,
+      subcategory,
       label,
       stock,
       sort_order: sort,
@@ -165,40 +203,44 @@ export async function seedInitialStock() {
     });
   };
 
+  // CDs — pas de subcategory, pas de label
   const noNut = mkFam("CD — No Nut's no Glory", 1000, 10);
-  const ep = mkFam("CD — The EP with no names", 1000, 20);
+  const ep    = mkFam("CD — The EP with no names", 1000, 20);
   const anniv = mkFam("CD — 20th Anniversaire", 1000, 30);
 
-  mkVar(noNut, null, 45, 10);
-  mkVar(ep, null, 71, 10);
-  mkVar(anniv, null, 22, 10);
+  mkVar(noNut, null, null, 45, 10);
+  mkVar(ep,    null, null, 71, 10);
+  mkVar(anniv, null, null, 22, 10);
 
-  const negan = mkFam("T-shirt Negan Homme", 2000, 100);
-  mkVar(negan, "2XL", 3, 60);
+  // T-shirt Negan (que Homme 2XL pour l'instant)
+  const negan = mkFam("T-shirt Negan", 2000, 100);
+  mkVar(negan, "Homme", "2XL", 3, 160);
 
-  const ahF = mkFam("T-shirt Ardenne Heavy Femme", 2000, 110);
-  mkVar(ahF, "S", 8, 10);
-  mkVar(ahF, "M", 4, 20);
-  mkVar(ahF, "L", 4, 30);
-  mkVar(ahF, "XL", 1, 40);
+  // T-shirt Ardenne Heavy — Homme + Femme unifiés
+  const ah = mkFam("T-shirt Ardenne Heavy", 2000, 110);
+  // Homme
+  mkVar(ah, "Homme", "S",  9, 110);
+  mkVar(ah, "Homme", "M",  4, 120);
+  mkVar(ah, "Homme", "L",  8, 130);
+  mkVar(ah, "Homme", "XL", 1, 140);
+  // Femme
+  mkVar(ah, "Femme", "S",  8, 210);
+  mkVar(ah, "Femme", "M",  4, 220);
+  mkVar(ah, "Femme", "L",  4, 230);
+  mkVar(ah, "Femme", "XL", 1, 240);
 
-  const ahH = mkFam("T-shirt Ardenne Heavy Homme", 2000, 120);
-  mkVar(ahH, "S", 9, 10);
-  mkVar(ahH, "M", 4, 20);
-  mkVar(ahH, "L", 8, 30);
-  mkVar(ahH, "XL", 1, 40);
-
-  const bF = mkFam("T-shirt Boris Femme", 2000, 130);
-  mkVar(bF, "S", 7, 10);
-  mkVar(bF, "M", 4, 20);
-  mkVar(bF, "L", 2, 30);
-
-  const bH = mkFam("T-shirt Boris Homme", 2000, 140);
-  mkVar(bH, "S", 12, 10);
-  mkVar(bH, "M", 9, 20);
-  mkVar(bH, "L", 10, 30);
-  mkVar(bH, "XL", 6, 40);
-  mkVar(bH, "2XL", 3, 50);
+  // T-shirt Boris — Homme + Femme unifiés
+  const boris = mkFam("T-shirt Boris", 2000, 120);
+  // Homme
+  mkVar(boris, "Homme", "S",   12, 110);
+  mkVar(boris, "Homme", "M",    9, 120);
+  mkVar(boris, "Homme", "L",   10, 130);
+  mkVar(boris, "Homme", "XL",   6, 140);
+  mkVar(boris, "Homme", "2XL",  3, 150);
+  // Femme
+  mkVar(boris, "Femme", "S",   7, 210);
+  mkVar(boris, "Femme", "M",   4, 220);
+  mkVar(boris, "Femme", "L",   2, 230);
 
   await batch.commit();
 }

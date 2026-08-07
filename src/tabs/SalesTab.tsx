@@ -23,7 +23,7 @@ import { CartSheet } from "../components/CartSheet";
 import type { Payment } from "../lib/payment";
 
 export function SalesTab() {
-  const { families, variants, concerts, sales, loading } = useStore();
+  const { families, variants, concerts, sales, loading, degraded } = useStore();
   const { concert, pick: pickActiveConcert } = useActiveConcert();
   const [pickerFamily, setPickerFamily] = useState<Family | null>(null);
   const [concertPicker, setConcertPicker] = useState(false);
@@ -61,16 +61,22 @@ export function SalesTab() {
 
   // Ce qui est rentré en liquide et ce qui est passé par QR : c'est la première
   // chose qu'on vérifie en fin de concert, avant même de compter la caisse.
+  //
+  // Les ventes enregistrées avant le suivi des paiements n'ont pas de méthode.
+  // Elles vont dans un troisième bac plutôt que d'être versées d'office au cash :
+  // sinon la ligne « Cash » d'ici et le tableau « Qui a encaissé » de l'onglet
+  // Concerts annonceraient deux montants différents pour le même concert. Ainsi
+  // les trois bacs retombent toujours exactement sur le total de la caisse.
   const paymentSplit = useMemo(() => {
     let cashCents = 0;
     let qrCents = 0;
+    let unknownCents = 0;
     for (const s of salesThisConcert) {
-      // Les ventes d'avant le suivi du moyen de paiement n'ont pas de méthode :
-      // elles comptent en liquide, c'est ce qui se faisait à l'époque.
       if (s.payment_method === "qr") qrCents += saleTotalCents(s);
-      else cashCents += saleTotalCents(s);
+      else if (s.payment_method === "cash") cashCents += saleTotalCents(s);
+      else unknownCents += saleTotalCents(s);
     }
-    return { cashCents, qrCents };
+    return { cashCents, qrCents, unknownCents };
   }, [salesThisConcert]);
 
   // PERF : un seul passage sur les ventes pour obtenir « vendus par variante ».
@@ -237,7 +243,19 @@ export function SalesTab() {
   };
 
   if (loading) {
-    return <div className="px-6 py-12 text-center text-muted-foreground">Chargement…</div>;
+    // Première ouverture sans réseau : rien n'est encore en cache, et l'écoute
+    // Firestore ne rendra la main qu'au retour de la connexion. Sans ce mot,
+    // « Chargement… » reste affiché indéfiniment sans la moindre explication.
+    return (
+      <div className="px-6 py-12 text-center space-y-2">
+        <div className="text-muted-foreground">Chargement…</div>
+        {degraded && (
+          <p className="text-xs text-warn">
+            Pas de connexion pour l'instant. L'app démarrera dès que le réseau revient.
+          </p>
+        )}
+      </div>
+    );
   }
 
   if (families.length === 0) {

@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { ChevronLeft, Plus, Trash2, Lock, RotateCcw, Banknote, QrCode } from "lucide-react";
 import { useStore } from "../lib/store";
@@ -72,11 +71,9 @@ export function ConcertsTab() {
         })}
       </div>
 
-      {newOpen &&
-        createPortal(
-          <NewConcertModal onClose={() => setNewOpen(false)} onCreated={() => {}} />,
-          document.body
-        )}
+      {/* NewConcertModal se place déjà lui-même dans document.body : un second
+          portail par-dessus n'ajouterait rien. */}
+      {newOpen && <NewConcertModal onClose={() => setNewOpen(false)} onCreated={() => {}} />}
     </div>
   );
 }

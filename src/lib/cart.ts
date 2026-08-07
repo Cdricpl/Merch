@@ -16,7 +16,7 @@ export type CartLine = {
 };
 
 /** « T-shirt Boris · Homme L », ou juste le nom pour un article sans taille. */
-export function lineLabel(family: Family, variant: Variant): string {
+function lineLabel(family: Family, variant: Variant): string {
   const parts = [variant.subcategory, variant.label].filter(Boolean);
   return parts.length > 0 ? `${family.name} · ${parts.join(" ")}` : family.name;
 }

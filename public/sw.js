@@ -1,4 +1,4 @@
-const CACHE = 'ah-merch-v14';
+const CACHE = 'ah-merch-v15';
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
 
 // Les bundles JS/CSS ont un hash dans leur nom : les servir depuis le cache est
@@ -6,7 +6,7 @@ const SCOPE_PATH = new URL(self.registration.scope).pathname;
 // déploiement à l'autre — en cache-first, on servait éternellement l'ancienne
 // version (c'est ce qui figeait le logo après un changement). On les passe donc
 // en network-first, avec repli sur le cache hors ligne.
-const UNVERSIONED = /\/(logo\.png|icon-[^/]*\.png|icon\.svg|manifest\.webmanifest)$/;
+const UNVERSIONED = /\/(logo\.png|icon-[^/]*\.png|manifest\.webmanifest)$/;
 
 self.addEventListener('install', () => {
   self.skipWaiting();

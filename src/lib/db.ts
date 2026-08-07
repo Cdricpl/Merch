@@ -45,7 +45,6 @@ export async function createFamily(name: string, priceCents: number): Promise<st
   const ref = await addDoc(collection(db, "families"), {
     name,
     price_cents: priceCents,
-    low_alert: 3,
     sort_order: 200,
     created_at: Date.now(),
   });
@@ -178,7 +177,6 @@ export async function seedInitialStock() {
     batch.set(ref, {
       name,
       price_cents: price,
-      low_alert: 3,
       sort_order: sort,
       created_at: now,
     });

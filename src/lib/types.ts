@@ -2,7 +2,6 @@ export type Family = {
   id: string;
   name: string;
   price_cents: number;
-  low_alert: number;
   sort_order: number;
   image?: string | null; // data URL (base64), compressed to ~50-100kB
 };

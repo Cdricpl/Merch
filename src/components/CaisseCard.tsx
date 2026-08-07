@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Banknote, QrCode, ShoppingBag } from "lucide-react";
+import { AlertTriangle, Banknote, HelpCircle, QrCode, ShoppingBag } from "lucide-react";
 import { formatEUR } from "../lib/format";
 import { CAISSE_IMG } from "../lib/assets";
 import type { Concert } from "../lib/types";
@@ -23,7 +23,7 @@ export function CaisseCard({
   totalCents: number;
   totalItems: number;
   lowStockCount: number;
-  paymentSplit: { cashCents: number; qrCents: number };
+  paymentSplit: { cashCents: number; qrCents: number; unknownCents: number };
   onTapConcert: () => void;
 }) {
   const closed = concert.is_closed === true;
@@ -87,7 +87,7 @@ export function CaisseCard({
       {/* Répartition liquide / QR, sur toute la largeur : c'est le chiffre qu'on
           recoupe en fin de soirée. Fond opaque pour rester lisible par-dessus
           la photo. */}
-      <div className="relative border-t border-border bg-card/90 px-4 py-2 flex items-center gap-5 text-[13px]">
+      <div className="relative border-t border-border bg-card/90 px-4 py-2 flex items-center gap-x-5 gap-y-1 flex-wrap text-[13px]">
         <span className="flex items-center gap-2">
           <Banknote className="h-4 w-4 text-ok shrink-0" />
           <span className="text-muted-foreground">Cash</span>
@@ -98,6 +98,15 @@ export function CaisseCard({
           <span className="text-muted-foreground">QR</span>
           <span className="font-semibold">{formatEUR(paymentSplit.qrCents)}</span>
         </span>
+        {/* N'apparaît que s'il reste de vieilles ventes sans moyen de paiement :
+            les additionner au cash ferait mentir le total. */}
+        {paymentSplit.unknownCents > 0 && (
+          <span className="flex items-center gap-2">
+            <HelpCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="text-muted-foreground">Non renseigné</span>
+            <span className="font-semibold">{formatEUR(paymentSplit.unknownCents)}</span>
+          </span>
+        )}
       </div>
     </button>
   );

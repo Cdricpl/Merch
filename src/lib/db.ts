@@ -114,23 +114,45 @@ export async function replenishVariant(id: string, add: number) {
 // en même temps peuvent faire passer le stock à -1. L'appelant vérifie le stock
 // local avant d'appeler, et l'affichage borne à 0.
 
-export async function recordSale(params: {
+/**
+ * Enregistre un passage en caisse complet : une ligne de vente par article du
+ * panier, plus la sortie de stock correspondante, le tout dans un seul batch.
+ *
+ * La remise éventuelle est déjà répartie ligne par ligne par l'appelant
+ * (cf. allocateDiscount) : chaque vente porte sa propre part, si bien que tous
+ * les totaux — et l'annulation d'une ligne — restent justes sans avoir à
+ * retrouver le panier d'origine.
+ */
+export async function recordCart(params: {
   concertId: string;
-  variantId: string;
-  priceCents: number;
+  lines: Array<{
+    variantId: string;
+    quantity: number;
+    unitPriceCents: number;
+    discountCents: number;
+  }>;
   payment: Payment;
 }) {
   const batch = writeBatch(db);
-  batch.update(doc(db, "variants", params.variantId), { stock: increment(-1) });
-  batch.set(doc(collection(db, "sales")), {
-    concert_id: params.concertId,
-    variant_id: params.variantId,
-    quantity: 1,
-    unit_price_cents: params.priceCents,
-    created_at: Date.now(),
-    payment_method: params.payment.method,
-    payment_payee: params.payment.payee,
-  });
+  // Un id de document sert d'identifiant de transaction : il est unique et
+  // généré côté client, donc disponible immédiatement, même hors ligne.
+  const group = doc(collection(db, "sales")).id;
+  const now = Date.now();
+
+  for (const l of params.lines) {
+    batch.update(doc(db, "variants", l.variantId), { stock: increment(-l.quantity) });
+    batch.set(doc(collection(db, "sales")), {
+      concert_id: params.concertId,
+      variant_id: l.variantId,
+      quantity: l.quantity,
+      unit_price_cents: l.unitPriceCents,
+      discount_cents: l.discountCents,
+      sale_group: group,
+      created_at: now,
+      payment_method: params.payment.method,
+      payment_payee: params.payment.payee,
+    });
+  }
   await batch.commit();
 }
 

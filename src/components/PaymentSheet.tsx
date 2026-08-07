@@ -11,13 +11,17 @@ import { useBackHandler } from "../lib/useBackHandler";
  */
 export function PaymentSheet({
   label,
-  priceCents,
+  sublabel,
+  totalCents,
   onConfirm,
   onCancel,
 }: {
-  /** Ce qui est vendu, ex. « T-shirt Boris · Homme L ». */
+  /** Ce qui est vendu, ex. « T-shirt Boris · Homme L » ou « 3 articles ». */
   label: string;
-  priceCents: number;
+  /** Ligne secondaire optionnelle, ex. « remise −10,00 € ». */
+  sublabel?: string;
+  /** Montant réellement réclamé au client, remise déduite. */
+  totalCents: number;
   onConfirm: (payment: Payment) => void;
   onCancel: () => void;
 }) {
@@ -38,8 +42,9 @@ export function PaymentSheet({
               Payé comment ?
             </div>
             <div className="font-display text-lg leading-tight truncate">{label}</div>
+            {sublabel && <div className="text-xs text-emerald-500 mt-0.5">{sublabel}</div>}
             <div className="font-display text-3xl text-primary leading-none mt-1">
-              {formatEUR(priceCents)}
+              {formatEUR(totalCents)}
             </div>
           </div>
           <button onClick={onCancel} aria-label="Annuler" className="p-2 -mr-2 -mt-1 text-muted-foreground shrink-0">

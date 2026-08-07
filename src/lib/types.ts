@@ -37,4 +37,14 @@ export type Sale = {
   // d'office en cash, ce qui fausserait les comptes sans prévenir.
   payment_method?: "cash" | "qr";
   payment_payee?: string | null; // nom du membre pour un QR, null en cash
+  // Remise : part de la ristourne du panier imputée à cette ligne (en centimes,
+  // positive, à soustraire). Absente sur les ventes sans remise.
+  discount_cents?: number;
+  // Identifiant commun aux lignes d'un même passage en caisse.
+  sale_group?: string;
 };
+
+/** Ce que la ligne a réellement rapporté, remise déduite. */
+export function saleTotalCents(s: Sale): number {
+  return s.quantity * s.unit_price_cents - (s.discount_cents ?? 0);
+}

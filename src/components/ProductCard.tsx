@@ -17,6 +17,7 @@ export const ProductCard = memo(function ProductCard({
   variants,
   stock,
   sold,
+  inCart,
   lowCount,
   onAdd,
   onRemove,
@@ -24,8 +25,11 @@ export const ProductCard = memo(function ProductCard({
 }: {
   family: Family;
   variants: Variant[];
+  /** Stock disponible, ce qui est déjà au panier déduit. */
   stock: number;
   sold: number;
+  /** Quantité de cette famille dans le panier en cours. */
+  inCart: number;
   lowCount: number;
   onAdd: (family: Family, variant: Variant | undefined) => void;
   onRemove: (family: Family) => void;
@@ -35,7 +39,9 @@ export const ProductCard = memo(function ProductCard({
   const single = variants.length === 1 && !variants[0].label;
   const shown = Math.max(0, stock);
   const disabled = shown <= 0;
-  const canRemove = sold > 0;
+  // Le « − » retire d'abord du panier ; sans panier en cours, il annule la
+  // dernière vente déjà encaissée.
+  const canRemove = inCart > 0 || sold > 0;
 
   const handlePrimary = () => (single ? onAdd(family, variants[0]) : onOpenPicker(family));
 
@@ -65,6 +71,11 @@ export const ProductCard = memo(function ProductCard({
         <div className="absolute top-2 right-2">
           <StockBadge stock={shown} alert={family.low_alert} lowCount={lowCount} />
         </div>
+        {inCart > 0 && (
+          <div className="absolute top-2 left-2 min-w-[1.4rem] h-[1.4rem] px-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shadow-lg shadow-black/40">
+            {inCart}
+          </div>
+        )}
       </button>
 
       {/* Text */}
@@ -83,7 +94,7 @@ export const ProductCard = memo(function ProductCard({
         <button
           onClick={() => onRemove(family)}
           disabled={!canRemove}
-          aria-label="Annuler la dernière vente"
+          aria-label={inCart > 0 ? "Retirer du panier" : "Annuler la dernière vente"}
           className="flex-1 py-2.5 flex items-center justify-center text-muted-foreground active:bg-muted/50 disabled:opacity-30 disabled:pointer-events-none"
         >
           <Minus className="h-4 w-4" />
@@ -111,6 +122,7 @@ export const ProductCard = memo(function ProductCard({
   a.family === b.family &&
   a.stock === b.stock &&
   a.sold === b.sold &&
+  a.inCart === b.inCart &&
   a.lowCount === b.lowCount &&
   // Seuls la longueur et le premier élément de `variants` influencent le rendu
   // (choix vente directe vs picker, et la variante vendue en un tap).

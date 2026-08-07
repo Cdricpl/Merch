@@ -7,7 +7,7 @@ import { formatEUR } from "../lib/format";
 import { paymentLabel } from "../lib/payment";
 import { deleteConcert, updateConcert } from "../lib/db";
 import { useBackHandler } from "../lib/useBackHandler";
-import type { Concert } from "../lib/types";
+import { saleTotalCents, type Concert } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
 import { ConcertCard } from "../components/ConcertCard";
 
@@ -21,7 +21,7 @@ export function ConcertsTab() {
     for (const s of sales) {
       const cur = m.get(s.concert_id) ?? { items: 0, cents: 0 };
       cur.items += s.quantity;
-      cur.cents += s.quantity * s.unit_price_cents;
+      cur.cents += saleTotalCents(s);
       m.set(s.concert_id, cur);
     }
     return m;
@@ -106,7 +106,7 @@ function ConcertDetail({
     for (const s of mySales) {
       const cur = m.get(s.variant_id) ?? { qty: 0, cents: 0 };
       cur.qty += s.quantity;
-      cur.cents += s.quantity * s.unit_price_cents;
+      cur.cents += saleTotalCents(s);
       m.set(s.variant_id, cur);
     }
     return m;
@@ -133,8 +133,9 @@ function ConcertDetail({
     return rows;
   }, [families, variants, byVariant]);
 
-  const total = mySales.reduce((s, x) => s + x.quantity * x.unit_price_cents, 0);
+  const total = mySales.reduce((s, x) => s + saleTotalCents(x), 0);
   const totalItems = mySales.reduce((s, x) => s + x.quantity, 0);
+  const totalDiscount = mySales.reduce((s, x) => s + (x.discount_cents ?? 0), 0);
 
   // Qui détient quoi : le cash est dans la boîte, chaque QR est arrivé sur le
   // compte d'un membre. C'est ce tableau qui sert à répartir en fin de soirée.
@@ -147,7 +148,7 @@ function ConcertDetail({
         cents: 0,
         items: 0,
       };
-      cur.cents += s.quantity * s.unit_price_cents;
+      cur.cents += saleTotalCents(s);
       cur.items += s.quantity;
       rows.set(key, cur);
     }
@@ -210,6 +211,9 @@ function ConcertDetail({
           <div className="font-display text-5xl text-primary leading-none mt-1">{formatEUR(total)}</div>
           <div className="text-xs text-muted-foreground mt-2">
             {totalItems} article{totalItems > 1 ? "s" : ""} vendu{totalItems > 1 ? "s" : ""}
+            {totalDiscount > 0 && (
+              <> · <span className="text-emerald-500">{formatEUR(totalDiscount)} de remises</span></>
+            )}
           </div>
         </div>
       </div>

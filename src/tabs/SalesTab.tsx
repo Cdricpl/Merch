@@ -5,13 +5,19 @@ import { toast } from "sonner";
 import { Plus, X, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
-import { recordSale, undoSale, seedInitialStock } from "../lib/db";
+import { recordCart, undoSale, seedInitialStock } from "../lib/db";
 import { useBackHandler } from "../lib/useBackHandler";
-import type { Family, Variant, Concert } from "../lib/types";
+import { saleTotalCents, type Family, type Variant, type Concert } from "../lib/types";
+import {
+  addLine, allocateDiscount, cartByVariant, cartCount, cartSubtotal,
+  dropLine, removeOne, type CartLine,
+} from "../lib/cart";
 import { NewConcertModal } from "../components/NewConcertModal";
 import { CaisseCard } from "../components/CaisseCard";
 import { ProductCard } from "../components/ProductCard";
 import { PaymentSheet } from "../components/PaymentSheet";
+import { CartBar } from "../components/CartBar";
+import { CartSheet } from "../components/CartSheet";
 import type { Payment } from "../lib/payment";
 
 // Le concert choisi survit aux changements d'onglet et aux rechargements.
@@ -26,14 +32,28 @@ export function SalesTab() {
     try { return localStorage.getItem(LS_CONCERT); } catch { return null; }
   });
   const [seeding, setSeeding] = useState(false);
-  // Article choisi, en attente du mode de paiement. Rien n'est écrit tant que
-  // la feuille n'est pas validée : la fermer annule la vente.
-  const [pendingSale, setPendingSale] = useState<{ family: Family; variant: Variant } | null>(null);
+
+  // Panier en cours. Il ne vit que dans cet état : rien n'est écrit tant que le
+  // paiement n'est pas validé, on peut donc le corriger librement.
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [discountCents, setDiscountCents] = useState(0);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+
+  const resetCart = useCallback(() => {
+    setCart([]);
+    setDiscountCents(0);
+    setCartOpen(false);
+    setPayOpen(false);
+  }, []);
 
   const pickConcert = useCallback((id: string) => {
     setActiveConcertId(id);
+    // Un panier appartient au concert où il a été commencé : changer de concert
+    // le remet à zéro plutôt que de risquer de l'encaisser au mauvais endroit.
+    resetCart();
     try { localStorage.setItem(LS_CONCERT, id); } catch { /* mode privé */ }
-  }, []);
+  }, [resetCart]);
 
   const concert: Concert | null = useMemo(() => {
     if (concerts.length === 0) return null;
@@ -50,7 +70,7 @@ export function SalesTab() {
     [sales, concert]
   );
 
-  const totalCents = salesThisConcert.reduce((s, x) => s + x.quantity * x.unit_price_cents, 0);
+  const totalCents = salesThisConcert.reduce((s, x) => s + saleTotalCents(x), 0);
   const totalItems = salesThisConcert.reduce((s, x) => s + x.quantity, 0);
 
   // Ce qui doit se trouver dans la caisse, et ce qui est parti sur les comptes.
@@ -59,7 +79,7 @@ export function SalesTab() {
     let qr = 0;
     let unknown = 0;
     for (const s of salesThisConcert) {
-      const amount = s.quantity * s.unit_price_cents;
+      const amount = saleTotalCents(s);
       if (s.payment_method === "cash") cash += amount;
       else if (s.payment_method === "qr") qr += amount;
       else unknown += amount;
@@ -88,20 +108,28 @@ export function SalesTab() {
     return m;
   }, [variants]);
 
+  // Ce qui est déjà réservé par le panier : c'est déduit du stock affiché, sinon
+  // on pourrait mettre au panier plus d'exemplaires qu'il n'en reste en caisse.
+  const inCartByVariant = useMemo(() => cartByVariant(cart), [cart]);
+
   const grouped = useMemo(() => {
     return families.map((f) => {
       const items = variantsByFamily.get(f.id) ?? [];
       let stock = 0;
       let sold = 0;
+      let inCart = 0;
       let lowCount = 0;
       for (const v of items) {
-        stock += v.stock;
+        const reserved = inCartByVariant.get(v.id) ?? 0;
+        const left = v.stock - reserved;
+        stock += left;
+        inCart += reserved;
         sold += soldByVariant.get(v.id) ?? 0;
-        if (v.stock <= f.low_alert) lowCount++;
+        if (left <= f.low_alert) lowCount++;
       }
-      return { family: f, items, stock, sold, lowCount };
+      return { family: f, items, stock, sold, inCart, lowCount };
     });
-  }, [families, variantsByFamily, soldByVariant]);
+  }, [families, variantsByFamily, soldByVariant, inCartByVariant]);
 
   // Le total d'une famille (ex. 40 t-shirts toutes tailles confondues) ne passe
   // jamais sous le seuil d'alerte : on compte donc les TAILLES en alerte, ce qui
@@ -111,36 +139,51 @@ export function SalesTab() {
     [grouped]
   );
 
+  const count = cartCount(cart);
+  const subtotal = cartSubtotal(cart);
+  const discount = Math.min(discountCents, subtotal);
+  const toPay = subtotal - discount;
+
   // Identité stable : indispensable pour que le React.memo de ProductCard tienne
   // (cf. useStableCallback). Le corps voit malgré tout toujours l'état à jour.
-  // Ouvre la feuille de paiement. La vente n'est écrite qu'une fois le mode
-  // choisi, dans confirmPayment.
-  const doAddSale = useStableCallback((family: Family, variant: Variant | undefined) => {
+  const addItem = useStableCallback((family: Family, variant: Variant | undefined) => {
     if (!concert || !variant) return;
     if (concert.is_closed) { toast.error("Concert clôturé"); return; }
     // Les écritures étant optimistes (cf. db.ts), c'est ici qu'on empêche de
     // vendre à découvert plutôt que dans une transaction serveur.
-    if (variant.stock <= 0) { toast.error("Stock épuisé"); return; }
-    setPendingSale({ family, variant });
+    if (variant.stock - (inCartByVariant.get(variant.id) ?? 0) <= 0) {
+      toast.error("Stock épuisé");
+      return;
+    }
+    navigator.vibrate?.(15);
+    setCart((c) => addLine(c, family, variant));
   });
 
-  const confirmPayment = useStableCallback(async (payment: Payment) => {
-    if (!concert || !pendingSale) return;
-    const { family, variant } = pendingSale;
-    setPendingSale(null);
-    navigator.vibrate?.(20);
-    try {
-      await recordSale({
-        concertId: concert.id,
-        variantId: variant.id,
-        priceCents: family.price_cents,
-        payment,
-      });
-    } catch (e) { toast.error((e as Error).message); }
-  });
-
-  const doRemoveLastSale = useStableCallback(async (family: Family, variant?: Variant) => {
+  /**
+   * Le « − » d'une carte ou d'une taille. Il retire d'abord du panier en cours ;
+   * s'il n'y a rien à retirer, il annule la dernière vente déjà encaissée — ce
+   * qui reste le geste attendu quand on s'aperçoit d'une erreur après coup.
+   */
+  const removeItem = useStableCallback(async (family: Family, variant?: Variant) => {
     if (!concert) return;
+
+    if (variant) {
+      if ((inCartByVariant.get(variant.id) ?? 0) > 0) {
+        navigator.vibrate?.(15);
+        setCart((c) => removeOne(c, variant.id));
+        return;
+      }
+    } else {
+      // Depuis la carte produit : on retire la dernière ligne ajoutée pour cette
+      // famille, toutes tailles confondues.
+      const line = [...cart].reverse().find((l) => l.familyId === family.id);
+      if (line) {
+        navigator.vibrate?.(15);
+        setCart((c) => removeOne(c, line.variantId));
+        return;
+      }
+    }
+
     // `sales` arrive déjà trié par created_at décroissant : le premier match est
     // donc la vente la plus récente, sans re-trier.
     let last;
@@ -152,11 +195,48 @@ export function SalesTab() {
     }
     if (!last) return;
     navigator.vibrate?.(50);
-    try { await undoSale(last.id, last.variant_id, last.quantity ?? 1); }
-    catch (e) { toast.error((e as Error).message); }
+    try {
+      await undoSale(last.id, last.variant_id, last.quantity ?? 1);
+      toast.success(
+        last.quantity > 1
+          ? `Vente annulée (${last.quantity} pièces)`
+          : "Vente annulée"
+      );
+    } catch (e) { toast.error((e as Error).message); }
+  });
+
+  const confirmPayment = useStableCallback(async (payment: Payment) => {
+    if (!concert || cart.length === 0) return;
+    const snapshot = cart;
+    const shares = allocateDiscount(
+      snapshot.map((l) => l.qty * l.unitPriceCents),
+      discount
+    );
+    resetCart();
+    navigator.vibrate?.(20);
+    try {
+      await recordCart({
+        concertId: concert.id,
+        lines: snapshot.map((l, i) => ({
+          variantId: l.variantId,
+          quantity: l.qty,
+          unitPriceCents: l.unitPriceCents,
+          discountCents: shares[i],
+        })),
+        payment,
+      });
+    } catch (e) {
+      // L'écriture est optimiste, donc un échec ici est rare — mais si ça arrive,
+      // on rend le panier plutôt que de perdre la vente en silence.
+      setCart(snapshot);
+      setDiscountCents(discount);
+      toast.error((e as Error).message);
+    }
   });
 
   const openPicker = useStableCallback((f: Family) => setPickerFamily(f));
+
+  const openPayment = useCallback(() => { setCartOpen(false); setPickerFamily(null); setPayOpen(true); }, []);
 
   const doSeed = async () => {
     setSeeding(true);
@@ -233,20 +313,34 @@ export function SalesTab() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {grouped.map(({ family, items, stock, sold, lowCount }) => (
+        {grouped.map(({ family, items, stock, sold, inCart, lowCount }) => (
           <ProductCard
             key={family.id}
             family={family}
             variants={items}
             stock={stock}
             sold={sold}
+            inCart={inCart}
             lowCount={lowCount}
-            onAdd={doAddSale}
-            onRemove={doRemoveLastSale}
+            onAdd={addItem}
+            onRemove={removeItem}
             onOpenPicker={openPicker}
           />
         ))}
       </div>
+
+      {/* Laisse respirer sous la grille quand la barre du panier est affichée. */}
+      {count > 0 && <div className="h-16" />}
+
+      {count > 0 && !cartOpen && !payOpen && (
+        <CartBar
+          count={count}
+          totalCents={toPay}
+          discounted={discount > 0}
+          onOpen={() => setCartOpen(true)}
+          onPay={openPayment}
+        />
+      )}
 
       {pickerFamily &&
         createPortal(
@@ -254,8 +348,12 @@ export function SalesTab() {
             family={pickerFamily}
             variants={variantsByFamily.get(pickerFamily.id) ?? []}
             soldByVariant={soldByVariant}
-            onAdd={(v) => doAddSale(pickerFamily, v)}
-            onRemove={(v) => doRemoveLastSale(pickerFamily, v)}
+            inCartByVariant={inCartByVariant}
+            cartCount={count}
+            cartTotalCents={toPay}
+            onAdd={(v) => addItem(pickerFamily, v)}
+            onRemove={(v) => removeItem(pickerFamily, v)}
+            onPay={openPayment}
             onClose={() => setPickerFamily(null)}
           />,
           document.body
@@ -273,13 +371,34 @@ export function SalesTab() {
           document.body
         )}
 
-      {pendingSale &&
+      {cartOpen &&
+        createPortal(
+          <CartSheet
+            cart={cart}
+            discountCents={discount}
+            onAdd={(vid) => {
+              const v = variants.find((x) => x.id === vid);
+              const f = v ? families.find((x) => x.id === v.family_id) : undefined;
+              if (v && f) addItem(f, v);
+            }}
+            onRemove={(vid) => setCart((c) => removeOne(c, vid))}
+            onDrop={(vid) => setCart((c) => dropLine(c, vid))}
+            onDiscountChange={setDiscountCents}
+            onClear={resetCart}
+            onPay={openPayment}
+            onClose={() => setCartOpen(false)}
+          />,
+          document.body
+        )}
+
+      {payOpen && cart.length > 0 &&
         createPortal(
           <PaymentSheet
-            label={saleLabel(pendingSale.family, pendingSale.variant)}
-            priceCents={pendingSale.family.price_cents}
+            label={count === 1 ? cart[0].label : `${count} articles`}
+            sublabel={discount > 0 ? `Remise −${formatEUR(discount)}` : undefined}
+            totalCents={toPay}
             onConfirm={confirmPayment}
-            onCancel={() => setPendingSale(null)}
+            onCancel={() => setPayOpen(false)}
           />,
           document.body
         )}
@@ -291,23 +410,23 @@ export function SalesTab() {
   );
 }
 
-/** « T-shirt Boris · Homme L », ou juste le nom pour un article sans taille. */
-function saleLabel(family: Family, variant: Variant): string {
-  const parts = [variant.subcategory, variant.label].filter(Boolean);
-  return parts.length > 0 ? `${family.name} · ${parts.join(" ")}` : family.name;
-}
-
 function VariantPickerModal({
-  family, variants, soldByVariant, onAdd, onRemove, onClose,
+  family, variants, soldByVariant, inCartByVariant, cartCount, cartTotalCents,
+  onAdd, onRemove, onPay, onClose,
 }: {
   family: Family;
   variants: Variant[];
   soldByVariant: Map<string, number>;
+  inCartByVariant: Map<string, number>;
+  cartCount: number;
+  cartTotalCents: number;
   onAdd: (v: Variant) => void;
   onRemove: (v: Variant) => void;
+  onPay: () => void;
   onClose: () => void;
 }) {
   const countFor = (id: string) => soldByVariant.get(id) ?? 0;
+  const inCartFor = (id: string) => inCartByVariant.get(id) ?? 0;
 
   // Group variants by subcategory (preserving sort_order-based array order)
   const groups = useMemo(() => {
@@ -343,9 +462,9 @@ function VariantPickerModal({
     ? null
     : (groups.find((g) => (g.subcategory ?? "") === pickedSub) ?? null);
 
-  // Total vendus par sous-catégorie (affiché sur le bouton de step 1)
-  const soldForGroup = (items: Variant[]) =>
-    items.reduce((sum, v) => sum + countFor(v.id), 0);
+  // Totaux par sous-catégorie (affichés sur le bouton de step 1)
+  const sumFor = (items: Variant[], f: (id: string) => number) =>
+    items.reduce((sum, v) => sum + f(v.id), 0);
 
   return (
     <div className="fixed inset-0 bg-black/70 z-[100] flex items-end backdrop-blur-sm" onClick={onClose}>
@@ -386,8 +505,9 @@ function VariantPickerModal({
         {hasSub && pickedSub === null && (
           <div className="space-y-3">
             {subGroups.map((g) => {
-              const stock = Math.max(0, g.items.reduce((s, v) => s + v.stock, 0));
-              const sold = soldForGroup(g.items);
+              const reserved = sumFor(g.items, inCartFor);
+              const stock = Math.max(0, g.items.reduce((s, v) => s + v.stock, 0) - reserved);
+              const sold = sumFor(g.items, countFor);
               return (
                 <button
                   key={g.subcategory}
@@ -395,7 +515,14 @@ function VariantPickerModal({
                   className="w-full flex items-center gap-3 bg-muted/50 hover:bg-muted rounded-2xl p-4 active:scale-[.98] transition text-left"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="font-display text-2xl">{g.subcategory}</div>
+                    <div className="font-display text-2xl">
+                      {g.subcategory}
+                      {reserved > 0 && (
+                        <span className="ml-2 align-middle text-xs font-sans font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
+                          {reserved}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-muted-foreground mt-0.5">
                       stock {stock}{sold > 0 && <> · vendus {sold}</>}
                     </div>
@@ -412,26 +539,35 @@ function VariantPickerModal({
           <ul className="space-y-2">
             {currentGroup.items.map((v) => {
               const count = countFor(v.id);
-              const lowStock = v.stock <= family.low_alert;
+              const reserved = inCartFor(v.id);
+              const left = Math.max(0, v.stock - reserved);
+              const lowStock = left <= family.low_alert;
               return (
                 <li key={v.id} className="flex items-center gap-3 bg-muted/50 rounded-xl p-2.5">
                   <div className="flex-1 min-w-0">
-                    <div className="font-display text-2xl">{v.label ?? "—"}</div>
+                    <div className="font-display text-2xl">
+                      {v.label ?? "—"}
+                      {reserved > 0 && (
+                        <span className="ml-2 align-middle text-xs font-sans font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
+                          {reserved}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-muted-foreground">
-                      stock <span className={lowStock ? "text-destructive font-semibold" : ""}>{Math.max(0, v.stock)}</span>
+                      stock <span className={lowStock ? "text-destructive font-semibold" : ""}>{left}</span>
                       {count > 0 && <> · vendus {count}</>}
                     </div>
                   </div>
                   <button
                     onClick={() => onRemove(v)}
-                    disabled={count === 0}
+                    disabled={reserved === 0 && count === 0}
                     className="w-11 h-11 rounded-full border border-border flex items-center justify-center active:scale-90 transition disabled:opacity-30"
                   >
                     <span className="text-xl leading-none">−</span>
                   </button>
                   <button
                     onClick={() => onAdd(v)}
-                    disabled={v.stock <= 0}
+                    disabled={left <= 0}
                     className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center active:scale-90 transition disabled:opacity-30"
                   >
                     <Plus className="h-5 w-5" />
@@ -440,6 +576,20 @@ function VariantPickerModal({
               );
             })}
           </ul>
+        )}
+
+        {/* Encaisser sans avoir à refermer le sélecteur — on enchaîne les tailles
+            puis on valide d'un tap. */}
+        {cartCount > 0 && (
+          <button
+            onClick={onPay}
+            className="mt-4 w-full flex items-center justify-between gap-3 rounded-2xl bg-primary text-primary-foreground px-4 py-3.5 active:scale-[.98] transition"
+          >
+            <span className="text-sm font-semibold">
+              Panier · {cartCount} article{cartCount > 1 ? "s" : ""}
+            </span>
+            <span className="font-display text-2xl leading-none">{formatEUR(cartTotalCents)}</span>
+          </button>
         )}
       </div>
     </div>
@@ -505,4 +655,3 @@ function ConcertPickerModal({
     </div>
   );
 }
-

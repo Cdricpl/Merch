@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ChevronLeft, Plus, Trash2, Lock, RotateCcw, Banknote, QrCode, Wallet, Package,
@@ -362,13 +362,46 @@ function FeeEditor({ concert }: { concert: Concert }) {
     catch (e) { toast.error((e as Error).message); }
   };
 
-  const saveAmount = (raw: string) => {
-    const next = Math.max(0, Math.round(parseFloat(raw.replace(",", ".") || "0") * 100));
+  const parseDraft = (raw: string) =>
+    Math.max(0, Math.round(parseFloat(raw.replace(",", ".") || "0") * 100));
+
+  // Ce que l'écran a de plus récent, lisible depuis un nettoyage d'effet.
+  const latest = useRef({ draft, cents, method: concert.fee_method });
+  useLayoutEffect(() => {
+    latest.current = { draft, cents, method: concert.fee_method };
+  });
+
+  // Enregistrement au fil de la frappe, une demi-seconde après la dernière
+  // touche : le montant part sans attendre que le champ perde le focus.
+  useEffect(() => {
+    const next = parseDraft(draft);
     if (next === cents) return;
-    // Passer de « rien » à un montant sans mode choisi : le liquide est le cas
-    // courant, on l'inscrit explicitement plutôt que de le laisser implicite.
-    save({ fee_cents: next, fee_method: concert.fee_method ?? "cash" });
-  };
+    const id = setTimeout(() => {
+      // Passer de « rien » à un montant sans mode choisi : le liquide est le
+      // cas courant, on l'inscrit explicitement plutôt que de le sous-entendre.
+      updateConcert(concert.id, {
+        fee_cents: next,
+        fee_method: concert.fee_method ?? "cash",
+      }).catch((e) => toast.error((e as Error).message));
+    }, 500);
+    return () => clearTimeout(id);
+  }, [draft, cents, concert.id, concert.fee_method]);
+
+  // Dernier filet au démontage. Quitter l'écran alors que le champ a encore le
+  // focus ne déclenche AUCUN `blur` — le navigateur retire simplement
+  // l'élément. Sans ça, un cachet tapé puis suivi d'un retour immédiat était
+  // perdu en silence, et rien n'arrivait dans la caisse.
+  useEffect(() => {
+    const id = concert.id;
+    return () => {
+      const cur = latest.current;
+      const next = parseDraft(cur.draft);
+      if (next === cur.cents) return;
+      updateConcert(id, { fee_cents: next, fee_method: cur.method ?? "cash" }).catch(() => {
+        /* hors ligne : Firestore rejouera l'écriture au retour du réseau */
+      });
+    };
+  }, [concert.id]);
 
   return (
     <div className="card-surface rounded-2xl p-3.5 space-y-3">
@@ -383,7 +416,6 @@ function FeeEditor({ concert }: { concert: Concert }) {
           type="number" step="10" min={0} inputMode="decimal"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={(e) => saveAmount(e.target.value)}
           placeholder="0"
           className="w-full bg-transparent text-2xl font-display outline-none"
         />

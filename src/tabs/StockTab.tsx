@@ -20,7 +20,7 @@ import { useBackHandler } from "../lib/useBackHandler";
 import type { Family, Variant } from "../lib/types";
 
 export function StockTab() {
-  const { families, variants, sales } = useStore();
+  const { families, variants } = useStore();
   const [openId, setOpenId] = useState<string | null>(null);
   // App remonte le composant (clé), ce qui rejoue cet état initial — plutôt
   // qu'un effet qui déclencherait un rendu en cascade.
@@ -59,18 +59,11 @@ export function StockTab() {
     () => variantsByFamily.get(openId ?? "") ?? [],
     [variantsByFamily, openId]
   );
-  const openFamilySaleIds = useMemo(() => {
-    if (!openFamily) return [];
-    const ids = new Set(openFamilyVariants.map((v) => v.id));
-    return sales.filter((s) => ids.has(s.variant_id)).map((s) => s.id);
-  }, [openFamily, openFamilyVariants, sales]);
-
   if (openFamily) {
     return (
       <FamilyDetail
         family={openFamily}
         variants={openFamilyVariants}
-        saleIds={openFamilySaleIds}
         onBack={() => setOpenId(null)}
         onDeleted={() => setOpenId(null)}
       />
@@ -131,11 +124,10 @@ export function StockTab() {
 }
 
 function FamilyDetail({
-  family, variants, saleIds, onBack, onDeleted,
+  family, variants, onBack, onDeleted,
 }: {
   family: Family;
   variants: Variant[];
-  saleIds: string[];
   onBack: () => void;
   onDeleted: () => void;
 }) {
@@ -187,9 +179,9 @@ function FamilyDetail({
   };
 
   const removeFamily = async () => {
-    if (!confirm(`Supprimer "${family.name}" ?`)) return;
+    if (!confirm(`Supprimer "${family.name}" ?\n\nLes ventes déjà enregistrées sont conservées.`)) return;
     try {
-      await deleteFamily(family.id, variants.map((v) => v.id), saleIds);
+      await deleteFamily(family.id, variants.map((v) => v.id));
       onDeleted();
     } catch (e) { toast.error((e as Error).message); }
   };

@@ -133,9 +133,15 @@ export async function updateFamily(id: string, patch: Partial<Omit<Family, "id">
   await updateDoc(doc(db, "families", id), patch as { [k: string]: unknown });
 }
 
-export async function deleteFamily(id: string, variantIds: string[], saleIds: string[]) {
+/**
+ * Supprime un produit et ses tailles — mais PAS ses ventes.
+ *
+ * Ce qui a été vendu l'a été : effacer les ventes réécrirait l'histoire de la
+ * caisse, et le total d'un concert passé changerait rétroactivement. Les ventes
+ * restent donc, et la fiche du concert les regroupe sous « Articles supprimés ».
+ */
+export async function deleteFamily(id: string, variantIds: string[]) {
   const batch = writeBatch(db);
-  for (const sid of saleIds) batch.delete(doc(db, "sales", sid));
   for (const vid of variantIds) batch.delete(doc(db, "variants", vid));
   batch.delete(doc(db, "families", id));
   await batch.commit();

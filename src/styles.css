@@ -76,17 +76,33 @@
 @layer base {
   html {
     color-scheme: dark;
+    height: 100%;
+    /* Coupe le « tirer pour rafraîchir » et le rebond élastique : sans ça, un
+       glissement vers le bas fait descendre toute la page et la barre
+       d'onglets sort de l'écran. */
+    overscroll-behavior: none;
   }
   * {
     border-color: var(--color-border);
   }
+  /* Le document lui-même ne défile jamais : il est cloué au viewport et c'est
+     `main` qui défile à l'intérieur. C'est la seule façon d'être sûr que la
+     barre d'onglets reste collée en bas sur mobile. */
   body {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
-    overscroll-behavior-y: contain;
+    overscroll-behavior: none;
+  }
+  /* Sans ça la chaîne de hauteurs se casse ici : `#root` retomberait en auto et
+     le `h-full` de la coquille ne vaudrait plus rien. */
+  #root {
+    height: 100%;
   }
   .font-display {
     font-family: var(--font-display);

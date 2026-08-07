@@ -32,7 +32,7 @@ export function PasscodeGate({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center px-6 bg-background">
+    <div className="h-full flex items-center justify-center px-6 bg-background">
       <form onSubmit={submit} className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
           <img

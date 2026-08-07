@@ -22,7 +22,7 @@ import { CartBar } from "../components/CartBar";
 import { CartSheet } from "../components/CartSheet";
 import type { Payment } from "../lib/payment";
 
-export function SalesTab({ onAddProduct }: { onAddProduct: () => void }) {
+export function SalesTab() {
   const { families, variants, concerts, sales, loading } = useStore();
   const { concert, pick: pickActiveConcert } = useActiveConcert();
   const [pickerFamily, setPickerFamily] = useState<Family | null>(null);
@@ -58,6 +58,20 @@ export function SalesTab({ onAddProduct }: { onAddProduct: () => void }) {
 
   const totalCents = salesThisConcert.reduce((s, x) => s + saleTotalCents(x), 0);
   const totalItems = salesThisConcert.reduce((s, x) => s + x.quantity, 0);
+
+  // Ce qui est rentré en liquide et ce qui est passé par QR : c'est la première
+  // chose qu'on vérifie en fin de concert, avant même de compter la caisse.
+  const paymentSplit = useMemo(() => {
+    let cashCents = 0;
+    let qrCents = 0;
+    for (const s of salesThisConcert) {
+      // Les ventes d'avant le suivi du moyen de paiement n'ont pas de méthode :
+      // elles comptent en liquide, c'est ce qui se faisait à l'époque.
+      if (s.payment_method === "qr") qrCents += saleTotalCents(s);
+      else cashCents += saleTotalCents(s);
+    }
+    return { cashCents, qrCents };
+  }, [salesThisConcert]);
 
   // PERF : un seul passage sur les ventes pour obtenir « vendus par variante ».
   // Avant, chaque variante refiltrait tout le tableau des ventes à chaque rendu
@@ -276,18 +290,11 @@ export function SalesTab({ onAddProduct }: { onAddProduct: () => void }) {
         totalCents={totalCents}
         totalItems={totalItems}
         lowStockCount={lowStockCount}
+        paymentSplit={paymentSplit}
         onTapConcert={() => setConcertPicker(true)}
       />
 
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-[19px]">Produits</h2>
-        <button
-          onClick={onAddProduct}
-          className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wider text-primary active:opacity-60 -mr-1 px-1 py-1"
-        >
-          <Plus className="h-4 w-4" /> Ajouter
-        </button>
-      </div>
+      <h2 className="font-display text-[19px]">Produits</h2>
 
       <div className="grid grid-cols-2 gap-3">
         {grouped.map(({ family, items, stock, sold, inCart, lowCount }) => (

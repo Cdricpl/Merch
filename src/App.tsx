@@ -46,7 +46,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { err: Error | nu
     const { err } = this.state;
     if (!err) return this.props.children;
     return (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-4 px-6 text-center bg-background">
+      <div className="h-[100svh] flex flex-col items-center justify-center gap-4 px-6 text-center bg-background overflow-y-auto">
         <h1 className="font-display text-2xl text-primary">L'affichage a planté</h1>
         <p className="text-sm text-muted-foreground">
           Les ventes déjà enregistrées sont en sécurité. Recharge pour repartir.
@@ -86,23 +86,20 @@ export default function App() {
 
 function Shell() {
   const [tab, setTab] = useState<Tab>("sales");
-  // Arriver sur Stock avec le formulaire « nouveau produit » déjà ouvert se fait
-  // en remontant l'onglet (la clé change) plutôt qu'avec un effet : l'état
-  // initial rejoué suffit, sans rendu en cascade.
   const [stockKey, setStockKey] = useState(0);
-  const [addProduct, setAddProduct] = useState(false);
   const { degraded } = useStore();
   const { concert } = useActiveConcert();
 
-  const goStock = () => { setAddProduct(false); setStockKey((k) => k + 1); setTab("stock"); };
-  const goAddProduct = () => { setAddProduct(true); setStockKey((k) => k + 1); setTab("stock"); };
+  // Revenir sur Stock le remonte (la clé change) : on retrouve la liste en haut
+  // plutôt que la fiche produit ouverte la fois d'avant.
+  const goStock = () => { setStockKey((k) => k + 1); setTab("stock"); };
 
   return (
-    <div className="min-h-[100dvh] bg-background sm:px-4">
+    <div className="h-full bg-background sm:px-4">
       {/* Hauteur DÉFINIE, pas seulement minimale : sans ça, la colonne grandit
           avec son contenu, `main` ne scrolle jamais tout seul, c'est le document
           entier qui défile — et la barre d'onglets part hors de l'écran. */}
-      <div className="h-[100dvh] max-w-[560px] mx-auto flex flex-col relative overflow-hidden sm:border-x sm:border-border">
+      <div className="h-full max-w-[560px] mx-auto flex flex-col relative overflow-hidden sm:border-x sm:border-border">
         <header className="px-4 pt-[max(0.875rem,env(safe-area-inset-top))] pb-3 shrink-0">
           {/* Rien que le logo, centré. Le bandeau de reconnexion se pose
               par-dessus, à droite, pour ne pas décaler le centrage. */}
@@ -134,9 +131,9 @@ function Shell() {
         </header>
 
         <main className="flex-1 overflow-y-auto">
-          {tab === "sales" && <SalesTab onAddProduct={goAddProduct} />}
+          {tab === "sales" && <SalesTab />}
           {tab === "concerts" && <ConcertsTab />}
-          {tab === "stock" && <StockTab key={stockKey} initialAddOpen={addProduct} />}
+          {tab === "stock" && <StockTab key={stockKey} />}
         </main>
 
         <nav

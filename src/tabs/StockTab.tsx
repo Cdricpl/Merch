@@ -19,13 +19,12 @@ import { VariantBar } from "../components/VariantBar";
 import { useBackHandler } from "../lib/useBackHandler";
 import type { Family, Variant } from "../lib/types";
 
-export function StockTab({ initialAddOpen = false }: { initialAddOpen?: boolean } = {}) {
+export function StockTab() {
   const { families, variants, sales } = useStore();
   const [openId, setOpenId] = useState<string | null>(null);
-  // Ouvert d'emblée quand on arrive par le « + Ajouter » de l'onglet Ventes.
   // App remonte le composant (clé), ce qui rejoue cet état initial — plutôt
   // qu'un effet qui déclencherait un rendu en cascade.
-  const [addOpen, setAddOpen] = useState(initialAddOpen);
+  const [addOpen, setAddOpen] = useState(false);
 
   // ⚠️ Tous les hooks doivent rester AVANT le retour anticipé du détail produit :
   // un hook appelé seulement dans la vue liste change le nombre de hooks entre

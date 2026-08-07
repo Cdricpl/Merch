@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, ShoppingBag } from "lucide-react";
+import { AlertTriangle, Banknote, QrCode, ShoppingBag } from "lucide-react";
 import { formatEUR } from "../lib/format";
 import { CAISSE_IMG } from "../lib/assets";
 import type { Concert } from "../lib/types";
@@ -16,12 +16,14 @@ export function CaisseCard({
   totalCents,
   totalItems,
   lowStockCount,
+  paymentSplit,
   onTapConcert,
 }: {
   concert: Concert;
   totalCents: number;
   totalItems: number;
   lowStockCount: number;
+  paymentSplit: { cashCents: number; qrCents: number };
   onTapConcert: () => void;
 }) {
   const closed = concert.is_closed === true;
@@ -80,6 +82,22 @@ export function CaisseCard({
         <AlertTriangle className={`h-3.5 w-3.5 shrink-0 ${lowStockCount > 0 ? "text-primary" : "text-muted-foreground"}`} />
         <span className="font-semibold">{lowStockCount}</span>
         <span className="text-muted-foreground">article{lowStockCount > 1 ? "s" : ""} faible{lowStockCount > 1 ? "s" : ""}</span>
+      </div>
+
+      {/* Répartition liquide / QR, sur toute la largeur : c'est le chiffre qu'on
+          recoupe en fin de soirée. Fond opaque pour rester lisible par-dessus
+          la photo. */}
+      <div className="relative border-t border-border bg-card/90 px-4 py-2 flex items-center gap-5 text-[13px]">
+        <span className="flex items-center gap-2">
+          <Banknote className="h-4 w-4 text-ok shrink-0" />
+          <span className="text-muted-foreground">Cash</span>
+          <span className="font-semibold">{formatEUR(paymentSplit.cashCents)}</span>
+        </span>
+        <span className="flex items-center gap-2">
+          <QrCode className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-muted-foreground">QR</span>
+          <span className="font-semibold">{formatEUR(paymentSplit.qrCents)}</span>
+        </span>
       </div>
     </button>
   );

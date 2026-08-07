@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { ShoppingBag, Boxes, Receipt } from "lucide-react";
+import { Component, useState, type ReactNode } from "react";
+import { ShoppingBag, Boxes, Receipt, RefreshCw } from "lucide-react";
 import { Toaster } from "sonner";
-import { StoreProvider } from "./lib/store";
+import { StoreProvider, useStore } from "./lib/store";
 import { SalesTab } from "./tabs/SalesTab";
 import { StockTab } from "./tabs/StockTab";
 import { ConcertsTab } from "./tabs/ConcertsTab";
@@ -27,20 +27,62 @@ async function hardRefresh() {
   window.location.reload();
 }
 
+/**
+ * Sans ça, la moindre erreur de rendu démonte tout l'arbre React : écran vide,
+ * plus aucun bouton, et rien d'autre à faire que tuer l'app et la relancer.
+ * Ici on garde la main et on propose le rechargement, avec le message d'erreur
+ * sous la main — précieux quand le plantage arrive au stand, sans ordinateur.
+ */
+class ErrorBoundary extends Component<{ children: ReactNode }, { err: Error | null }> {
+  state: { err: Error | null } = { err: null };
+
+  static getDerivedStateFromError(err: Error) {
+    return { err };
+  }
+
+  render() {
+    const { err } = this.state;
+    if (!err) return this.props.children;
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-4 px-6 text-center bg-background">
+        <h1 className="font-display text-2xl text-primary">L'affichage a planté</h1>
+        <p className="text-sm text-muted-foreground">
+          Les ventes déjà enregistrées sont en sécurité. Recharge pour repartir.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="rounded-xl bg-primary text-primary-foreground font-display text-xl tracking-wider px-8 py-4"
+        >
+          Recharger
+        </button>
+        <button onClick={hardRefresh} className="text-xs text-muted-foreground underline">
+          Vider le cache et recharger
+        </button>
+        <pre className="mt-2 max-h-40 w-full overflow-auto text-left text-[10px] text-muted-foreground/70 whitespace-pre-wrap">
+          {err.message}
+        </pre>
+      </div>
+    );
+  }
+}
+
 export default function App() {
   return (
     <PasscodeGate>
-      <StoreProvider>
-        <Shell />
-        <InstallPrompt />
-        <Toaster theme="dark" position="top-center" richColors />
-      </StoreProvider>
+      <ErrorBoundary>
+        <StoreProvider>
+          <Shell />
+          <InstallPrompt />
+          <Toaster theme="dark" position="top-center" richColors />
+        </StoreProvider>
+      </ErrorBoundary>
     </PasscodeGate>
   );
 }
 
 function Shell() {
   const [tab, setTab] = useState<Tab>("sales");
+  const { degraded } = useStore();
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background">
@@ -50,14 +92,24 @@ function Shell() {
           alt="Ardenne Heavy"
           className="h-9 w-auto object-contain"
         />
-        <button
-          onClick={hardRefresh}
-          aria-label="Vider le cache"
-          title="Version — tape pour forcer le rechargement"
-          className="text-[9px] font-mono text-muted-foreground/60 px-2 py-1 rounded active:bg-muted"
-        >
-          {__APP_VERSION__}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Dire que la connexion se rétablit vaut mieux que laisser croire que
+              l'app est figée : les chiffres à l'écran sont justes, ils sont
+              simplement en train de rattraper leur retard. */}
+          {degraded && (
+            <span className="inline-flex items-center gap-1.5 text-[10px] text-amber-500 bg-amber-500/10 px-2 py-1 rounded-full">
+              <RefreshCw className="h-3 w-3 animate-spin" /> Reconnexion…
+            </span>
+          )}
+          <button
+            onClick={hardRefresh}
+            aria-label="Vider le cache"
+            title="Version — tape pour forcer le rechargement"
+            className="text-[9px] font-mono text-muted-foreground/60 px-2 py-1 rounded active:bg-muted"
+          >
+            {__APP_VERSION__}
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto pb-24">

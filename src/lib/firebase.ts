@@ -1,5 +1,7 @@
 import { initializeApp } from "firebase/app";
 import {
+  disableNetwork,
+  enableNetwork,
   getFirestore,
   initializeFirestore,
   persistentLocalCache,
@@ -55,3 +57,23 @@ export const db = (() => {
     return getFirestore(app);
   }
 })();
+
+/**
+ * Force le SDK à jeter sa connexion et à en rouvrir une.
+ *
+ * Quand le téléphone met l'app en veille, le flux temps réel de Firestore meurt
+ * sans que le SDK ne s'en aperçoive : au réveil, il croit être connecté et
+ * n'envoie plus rien. Se réabonner ne suffit pas — les écoutes partagent le même
+ * flux mort. Ce cycle-là le reconstruit vraiment.
+ *
+ * Les écritures en attente ne sont pas perdues : elles restent dans IndexedDB et
+ * repartent dès que le réseau est réactivé.
+ */
+export async function kickConnection(): Promise<void> {
+  try {
+    await disableNetwork(db);
+    await enableNetwork(db);
+  } catch {
+    /* bascule déjà en cours, ou SDK en cours d'arrêt */
+  }
+}

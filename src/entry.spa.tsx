@@ -5,18 +5,36 @@ import App from "./App";
 // souvent émis avant que React ne soit monté.
 import "./lib/pwaInstall";
 
-// Global error surface for debugging on mobile (no devtools available)
+// Filet de diagnostic sur mobile, où il n'y a pas de console.
+//
+// Le bandeau doit rester REFERMABLE : une erreur passagère (une promesse
+// Firestore rejetée pendant la mise en veille, par exemple) ne doit pas
+// recouvrir l'app pour le reste de la soirée alors que tout refonctionne.
 function showError(label: string, err: unknown) {
   const msg = err instanceof Error ? `${err.name}: ${err.message}\n${err.stack ?? ""}` : String(err);
   let box = document.getElementById("app-error");
-  if (!box) {
+  let body = document.getElementById("app-error-body");
+  if (!box || !body) {
     box = document.createElement("div");
     box.id = "app-error";
     box.style.cssText =
-      "position:fixed;top:0;left:0;right:0;z-index:99999;background:#b00020;color:#fff;padding:12px;font:12px/1.4 system-ui;white-space:pre-wrap;max-height:50vh;overflow:auto;";
+      "position:fixed;top:0;left:0;right:0;z-index:99999;background:#b00020;color:#fff;padding:12px 40px 12px 12px;font:12px/1.4 system-ui;max-height:40vh;overflow:auto;";
+
+    const close = document.createElement("button");
+    close.textContent = "✕";
+    close.setAttribute("aria-label", "Fermer");
+    close.style.cssText =
+      "position:absolute;top:4px;right:4px;background:none;border:0;color:#fff;font-size:18px;padding:6px 10px;";
+    close.onclick = () => box?.remove();
+
+    body = document.createElement("div");
+    body.id = "app-error-body";
+    body.style.whiteSpace = "pre-wrap";
+
+    box.append(close, body);
     document.body.appendChild(box);
   }
-  box.textContent = (box.textContent ? box.textContent + "\n\n" : "") + `[${label}] ${msg}`;
+  body.textContent = (body.textContent ? body.textContent + "\n\n" : "") + `[${label}] ${msg}`;
 }
 window.addEventListener("error", (e) => showError("error", e.error ?? e.message));
 window.addEventListener("unhandledrejection", (e) => showError("promise", e.reason));

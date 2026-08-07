@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Banknote, HelpCircle, QrCode, ShoppingBag } from "lucide-react";
+import { Banknote, HelpCircle, QrCode, ShoppingBag } from "lucide-react";
 import { formatEUR } from "../lib/format";
 import { CAISSE_IMG } from "../lib/assets";
 import type { Concert } from "../lib/types";
@@ -15,14 +15,12 @@ export function CaisseCard({
   concert,
   totalCents,
   totalItems,
-  lowStockCount,
   paymentSplit,
   onTapConcert,
 }: {
   concert: Concert;
   totalCents: number;
   totalItems: number;
-  lowStockCount: number;
   paymentSplit: { cashCents: number; qrCents: number; unknownCents: number };
   onTapConcert: () => void;
 }) {
@@ -92,12 +90,6 @@ export function CaisseCard({
         <ShoppingBag className="h-3.5 w-3.5 text-primary shrink-0" />
         <span className="font-semibold">{totalItems}</span>
         <span className="text-muted-foreground">vente{totalItems > 1 ? "s" : ""}</span>
-      </div>
-
-      <div className="relative border-t border-border px-4 py-2 flex items-center gap-2 text-[13px] w-[52%]">
-        <AlertTriangle className={`h-3.5 w-3.5 shrink-0 ${lowStockCount > 0 ? "text-primary" : "text-muted-foreground"}`} />
-        <span className="font-semibold">{lowStockCount}</span>
-        <span className="text-muted-foreground">article{lowStockCount > 1 ? "s" : ""} faible{lowStockCount > 1 ? "s" : ""}</span>
       </div>
 
       {/* Répartition liquide / QR, sur toute la largeur : c'est le chiffre qu'on

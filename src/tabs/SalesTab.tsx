@@ -123,14 +123,6 @@ export function SalesTab() {
     });
   }, [families, variantsByFamily, soldByVariant, inCartByVariant]);
 
-  // Le total d'une famille (ex. 40 t-shirts toutes tailles confondues) ne passe
-  // jamais sous le seuil d'alerte : on compte donc les TAILLES en alerte, ce qui
-  // reflète réellement ce qu'il faut réassortir.
-  const lowStockCount = useMemo(
-    () => grouped.reduce((n, g) => n + g.lowCount, 0),
-    [grouped]
-  );
-
   const count = cartCount(cart);
   const subtotal = cartSubtotal(cart);
   const discount = Math.min(discountCents, subtotal);
@@ -307,7 +299,6 @@ export function SalesTab() {
         concert={concert}
         totalCents={totalCents}
         totalItems={totalItems}
-        lowStockCount={lowStockCount}
         paymentSplit={paymentSplit}
         onTapConcert={() => setConcertPicker(true)}
       />

@@ -43,18 +43,24 @@ export function CaisseCard({
             onError={() => setHasPhoto(false)}
             className="absolute inset-0 w-full h-full object-cover object-right"
           />
-          {/* Dégradé vers le noir sur la gauche : c'est lui qui rend le texte
-              lisible quelle que soit la photo déposée. Les paliers sont serrés
-              à gauche pour dégager la photo — le voile ne couvre vraiment que
-              la colonne de chiffres. */}
-          <div className="absolute inset-0 bg-gradient-to-r from-card from-8% via-card/75 via-38% to-transparent to-72%" />
-          <div className="absolute inset-0 bg-gradient-to-t from-card/45 to-transparent to-45%" />
+          {/* Les quatre musiciens sont répartis sur toute la largeur : un rideau
+              noir à gauche en effacerait la moitié. Le dégradé ne fait donc
+              qu'appuyer derrière les chiffres, et la lisibilité du texte vient
+              surtout de son ombre portée. Pas de voile d'ensemble : la photo
+              est déjà nocturne, l'assombrir davantage la rendait illisible. */}
+          <div className="absolute inset-0 bg-gradient-to-r from-card/92 from-0% via-card/50 via-28% to-transparent to-60%" />
+          {/* La ligne « N ventes » tombe pile sur la caisse claire de la
+              batterie : sans cet appui par le bas, le gris du libellé s'y
+              dissout. */}
+          <div className="absolute inset-0 bg-gradient-to-t from-card/80 to-transparent to-42%" />
         </div>
       )}
 
       {/* Nom et date du concert : ils vivent ici, sur la carte, plutôt qu'en
-          haut de chaque onglet où ils n'apprenaient rien. */}
-      <div className="relative px-4 pt-3 flex items-start gap-2">
+          haut de chaque onglet où ils n'apprenaient rien.
+          L'ombre portée remplace le rideau noir d'avant : elle décolle le texte
+          de la photo sans avoir à l'assombrir. */}
+      <div className="relative px-4 pt-3 flex items-start gap-2 [text-shadow:0_1px_10px_rgb(0_0_0_/_0.9)]">
         <div className="min-w-0 flex-1">
           <div className={`font-display text-[18px] leading-none truncate ${closed ? "text-muted-foreground" : "text-foreground"}`}>
             {concert.name}
@@ -78,7 +84,7 @@ export function CaisseCard({
         </span>
       </div>
 
-      <div className="relative px-4 pt-2.5 pb-2.5 w-[52%]">
+      <div className="relative px-4 pt-2.5 pb-2.5 w-[52%] [text-shadow:0_2px_12px_rgb(0_0_0_/_0.95)]">
         <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Caisse</div>
         <div className="mt-1 flex items-baseline text-primary font-display leading-none">
           <span className="text-[2.6rem]">{whole}</span>
@@ -86,7 +92,7 @@ export function CaisseCard({
         </div>
       </div>
 
-      <div className="relative border-t border-border px-4 py-2 flex items-center gap-2 text-[13px] w-[52%]">
+      <div className="relative border-t border-border px-4 py-2 flex items-center gap-2 text-[13px] w-[52%] [text-shadow:0_1px_10px_rgb(0_0_0_/_0.9)]">
         <ShoppingBag className="h-3.5 w-3.5 text-primary shrink-0" />
         <span className="font-semibold">{totalItems}</span>
         <span className="text-muted-foreground">vente{totalItems > 1 ? "s" : ""}</span>

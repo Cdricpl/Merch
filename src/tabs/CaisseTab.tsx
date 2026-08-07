@@ -1,8 +1,12 @@
-import { useMemo } from "react";
-import { Check, QrCode } from "lucide-react";
+import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { toast } from "sonner";
+import { Check, ClipboardCheck, QrCode, X } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import { caisseFor, caisseTotal, type CaisseState } from "../lib/caisse";
+import { recordCaisseCheck } from "../lib/db";
+import { useBackHandler } from "../lib/useBackHandler";
 import { CaisseBox } from "../components/CaisseBox";
 import type { Concert } from "../lib/types";
 
@@ -14,7 +18,8 @@ import type { Concert } from "../lib/types";
  * entré, ce qui est sorti et ce qui n'est pas encore rentré.
  */
 export function CaisseTab() {
-  const { concerts, sales, expenses, settlements, loading } = useStore();
+  const { concerts, sales, expenses, settlements, caisseChecks, loading } = useStore();
+  const [countOpen, setCountOpen] = useState(false);
 
   // Un seul passage sur chaque collection pour répartir les lignes par concert,
   // plutôt qu'un filtre complet par concert (qui serait quadratique).
@@ -40,7 +45,19 @@ export function CaisseTab() {
     }));
   }, [concerts, sales, expenses, settlements]);
 
-  const total = useMemo(() => caisseTotal(perConcert.map((r) => r.state)), [perConcert]);
+  // Seul le comptage le plus récent s'applique ; les précédents restent comme
+  // historique. La liste arrive déjà triée du plus récent au plus ancien.
+  const adjust = caisseChecks[0]?.adjust_cents ?? 0;
+  const lastCheck = caisseChecks[0];
+
+  const total = useMemo(
+    () => caisseTotal(perConcert.map((r) => r.state), adjust),
+    [perConcert, adjust]
+  );
+
+  // Ce que l'app compterait sans le report : c'est cette valeur que le prochain
+  // comptage doit corriger.
+  const withoutAdjust = total.inBox - adjust;
 
   if (loading) {
     return <div className="px-6 py-12 text-center text-muted-foreground">Chargement…</div>;
@@ -62,6 +79,21 @@ export function CaisseTab() {
       <h1 className="font-display text-[22px]">Caisse</h1>
 
       <CaisseBox state={total} title="Total général" />
+
+      <button
+        onClick={() => setCountOpen(true)}
+        className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm active:bg-muted/40 transition"
+      >
+        <ClipboardCheck className="h-4 w-4" /> J'ai compté la caisse
+      </button>
+      {lastCheck && (
+        <p className="text-[11px] text-muted-foreground -mt-2 px-1">
+          Dernier comptage : {formatEUR(lastCheck.counted_cents)} le{" "}
+          {new Date(lastCheck.created_at).toLocaleDateString("fr-BE", {
+            day: "2-digit", month: "long", year: "numeric",
+          })}.
+        </p>
+      )}
 
       {total.debts.length > 0 && (
         <div className="space-y-2">
@@ -100,6 +132,123 @@ export function CaisseTab() {
       )}
 
       <ConcertBreakdown rows={perConcert} />
+
+      {countOpen &&
+        createPortal(
+          <CountSheet
+            claimed={total.inBox}
+            raw={withoutAdjust}
+            onClose={() => setCountOpen(false)}
+          />,
+          document.body
+        )}
+    </div>
+  );
+}
+
+/**
+ * Comptage réel de la boîte.
+ *
+ * L'app additionne ce qu'elle connaît, mais la boîte contenait déjà de l'argent
+ * avant qu'elle n'existe. Plutôt que de demander une « somme de départ » — un
+ * chiffre que personne ne retrouve jamais — on demande ce qu'il y a MAINTENANT,
+ * et on en déduit l'écart. Le total repart de la réalité.
+ */
+function CountSheet({ claimed, raw, onClose }: {
+  /** Ce que l'app affiche aujourd'hui, report compris — la valeur à comparer. */
+  claimed: number;
+  /** La même chose SANS le report : c'est elle que le nouvel écart corrige. */
+  raw: number;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  useBackHandler(true, onClose);
+
+  const counted = Math.round(parseFloat(value.replace(",", ".") || "0") * 100);
+  const valid = value.trim() !== "" && Number.isFinite(counted) && counted >= 0;
+  // L'écart montré est celui qui parle : la dérive depuis le dernier comptage.
+  // Le report enregistré, lui, se calcule sur la valeur brute — sinon le report
+  // précédent serait compté deux fois.
+  const delta = counted - claimed;
+
+  const submit = async () => {
+    if (!valid) return;
+    setBusy(true);
+    try {
+      await recordCaisseCheck(counted, raw);
+      toast.success("Caisse recalée");
+      onClose();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-[100] flex items-end backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full bg-card border-t border-border rounded-t-3xl p-5 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+        style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
+      >
+        <div className="w-10 h-1 rounded-full bg-muted mx-auto" />
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="font-display text-xl">Comptage de la caisse</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Compte les billets et les pièces, et saisis le total.
+            </p>
+          </div>
+          <button onClick={onClose} aria-label="Fermer" className="p-2 -mr-2 -mt-1 text-muted-foreground shrink-0">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <label className="rounded-xl bg-input border border-border px-3 py-2 block">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Montant compté (€)
+          </div>
+          <input
+            type="number" step="0.01" min={0} inputMode="decimal"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="0,00"
+            autoFocus
+            className="w-full bg-transparent text-3xl font-display outline-none"
+          />
+        </label>
+
+        <div className="rounded-xl bg-muted/40 border border-border/60 p-3 space-y-1.5">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">L'app comptait</span>
+            <span>{formatEUR(claimed)}</span>
+          </div>
+          {valid && (
+            <div className="flex items-center justify-between text-sm border-t border-border/60 pt-1.5">
+              <span className="text-muted-foreground">Écart</span>
+              <span className={delta === 0 ? "text-ok" : delta > 0 ? "text-ok" : "text-destructive"}>
+                {delta > 0 ? "+" : delta < 0 ? "−" : ""}
+                {formatEUR(Math.abs(delta))}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {valid && delta !== 0 && (
+          <p className="text-[11px] text-muted-foreground">
+            L'écart est retenu comme report : à partir de maintenant, le total
+            part de {formatEUR(counted)} et les ventes s'y ajoutent.
+          </p>
+        )}
+
+        <button
+          onClick={submit}
+          disabled={!valid || busy}
+          className="w-full rounded-xl btn-primary font-display tracking-wider py-3 disabled:opacity-40"
+        >
+          {busy ? "…" : "Enregistrer le comptage"}
+        </button>
+      </div>
     </div>
   );
 }

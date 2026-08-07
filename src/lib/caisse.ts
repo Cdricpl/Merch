@@ -31,6 +31,12 @@ export type CaisseState = {
   settled: number;
   /** Sorties d'argent. */
   expenses: number;
+  /**
+   * Écart du dernier comptage réel : ce que la boîte contenait déjà avant que
+   * l'app ne suive quoi que ce soit, plus tout ce qui a pu s'égarer depuis.
+   * Global, donc toujours nul au niveau d'un concert isolé.
+   */
+  adjust: number;
   /** Ce que la boîte doit contenir. */
   inBox: number;
   /** Total encore détenu par les membres. */
@@ -130,6 +136,7 @@ export function caisseFor(
     feeCash,
     settled,
     expenses: expensesTotal,
+    adjust: 0,
     inBox: cashSales + feeCash + settled - expensesTotal,
     owed,
     debts,
@@ -138,12 +145,15 @@ export function caisseFor(
   };
 }
 
-/** Somme des états de tous les concerts : le contenu réel de la boîte. */
-export function caisseTotal(states: CaisseState[]): CaisseState {
+/**
+ * Somme des états de tous les concerts, plus l'écart du dernier comptage : le
+ * contenu réel de la boîte.
+ */
+export function caisseTotal(states: CaisseState[], adjust = 0): CaisseState {
   const merged = new Map<string, PayeeDebt>();
   const out: CaisseState = {
-    cashSales: 0, feeCash: 0, settled: 0, expenses: 0,
-    inBox: 0, owed: 0, debts: [], unknownSales: 0, revenue: 0,
+    cashSales: 0, feeCash: 0, settled: 0, expenses: 0, adjust,
+    inBox: adjust, owed: 0, debts: [], unknownSales: 0, revenue: 0,
   };
 
   for (const s of states) {

@@ -18,6 +18,16 @@ export function CaisseBox({ state, title = "État de la caisse" }: {
   if (state.feeCash !== 0) rows.push({ label: "Cachet en liquide", cents: state.feeCash, sign: "+" });
   if (state.settled !== 0) rows.push({ label: "Remis par les membres", cents: state.settled, sign: "+" });
   if (state.expenses !== 0) rows.push({ label: "Dépenses", cents: state.expenses, sign: "−" });
+  // Ce qui était dans la boîte avant l'app, plus l'écart des comptages. En faire
+  // une ligne visible plutôt qu'un total corrigé en douce : c'est la seule façon
+  // de comprendre pourquoi la somme des soirées ne fait pas le total.
+  if (state.adjust !== 0) {
+    rows.push({
+      label: "Report du dernier comptage",
+      cents: Math.abs(state.adjust),
+      sign: state.adjust < 0 ? "−" : "+",
+    });
+  }
 
   return (
     <div className="card-surface rounded-2xl p-4">

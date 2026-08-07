@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { collection, onSnapshot, orderBy, query, type Query } from "firebase/firestore";
 import { db, kickConnection } from "./firebase";
-import type { Family, Variant, Concert, Sale, Expense, Settlement } from "./types";
+import type { Family, Variant, Concert, Sale, Expense, Settlement, CaisseCheck } from "./types";
 
 type Store = {
   families: Family[];
@@ -10,6 +10,8 @@ type Store = {
   sales: Sale[];
   expenses: Expense[];
   settlements: Settlement[];
+  /** Comptages réels de la boîte, du plus récent au plus ancien. */
+  caisseChecks: CaisseCheck[];
   loading: boolean;
   /** Les écoutes temps réel sont tombées ; une reconnexion est en cours. */
   degraded: boolean;
@@ -29,7 +31,7 @@ const LS_PREFIX = "merch:v4:";
 const STALE_AFTER_MS = 60_000;
 
 // Nombre d'écoutes temps réel : sert de repère pour savoir quand tout est arrivé.
-const SUBSCRIPTIONS = 6;
+const SUBSCRIPTIONS = 7;
 
 function readCache<T>(name: string): T[] {
   try {
@@ -67,6 +69,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [sales, setSales] = useState<Sale[]>(() => readCache<Sale>("sales"));
   const [expenses, setExpenses] = useState<Expense[]>(() => readCache<Expense>("expenses"));
   const [settlements, setSettlements] = useState<Settlement[]>(() => readCache<Settlement>("settlements"));
+  const [caisseChecks, setCaisseChecks] = useState<CaisseCheck[]>(() => readCache<CaisseCheck>("caisseChecks"));
   const [loadCount, setLoadCount] = useState(0); // increments as each snapshot lands
   const [degraded, setDegraded] = useState(false);
 
@@ -80,6 +83,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useDeferredCache("sales", sales);
   useDeferredCache("expenses", expenses);
   useDeferredCache("settlements", settlements);
+  useDeferredCache("caisseChecks", caisseChecks);
 
   /** Reconstruit la connexion puis se réabonne. */
   const resync = useCallback(() => {
@@ -130,6 +134,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     sub<Sale>(query(collection(db, "sales"), orderBy("created_at", "desc")), setSales);
     sub<Expense>(query(collection(db, "expenses"), orderBy("created_at", "desc")), setExpenses);
     sub<Settlement>(query(collection(db, "settlements"), orderBy("created_at", "desc")), setSettlements);
+    sub<CaisseCheck>(query(collection(db, "caisse_checks"), orderBy("created_at", "desc")), setCaisseChecks);
 
     return () => {
       restarting = true;
@@ -164,7 +169,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const loading = loadCount < SUBSCRIPTIONS && families.length === 0;
 
   return (
-    <Ctx.Provider value={{ families, variants, concerts, sales, expenses, settlements, loading, degraded }}>
+    <Ctx.Provider value={{ families, variants, concerts, sales, expenses, settlements, caisseChecks, loading, degraded }}>
       {children}
     </Ctx.Provider>
   );

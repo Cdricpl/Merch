@@ -278,3 +278,25 @@ export async function seedInitialStock() {
 
   await batch.commit();
 }
+
+/**
+ * Enregistre un comptage réel de la boîte.
+ *
+ * On garde les trois chiffres — compté, attendu, écart — plutôt que le seul
+ * écart : le jour où un total surprend, c'est en relisant l'historique des
+ * comptages qu'on retrouve à partir de quand ça a dérapé.
+ */
+export async function recordCaisseCheck(countedCents: number, computedCents: number) {
+  const counted = Math.round(countedCents);
+  const computed = Math.round(computedCents);
+  await addDoc(collection(db, "caisse_checks"), {
+    counted_cents: counted,
+    computed_cents: computed,
+    adjust_cents: counted - computed,
+    created_at: Date.now(),
+  });
+}
+
+export async function deleteCaisseCheck(id: string) {
+  await deleteDoc(doc(db, "caisse_checks", id));
+}

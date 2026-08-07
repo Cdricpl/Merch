@@ -59,6 +59,28 @@ export type Settlement = {
   created_at: number;
 };
 
+/**
+ * Un comptage réel de la boîte.
+ *
+ * Tout ce que l'app additionne part des concerts qu'elle connaît — or la boîte
+ * contenait déjà de l'argent avant, et un billet peut toujours s'égarer. On
+ * enregistre donc l'écart entre ce qui a été compté et ce qui était attendu :
+ * le total repart de la réalité, et les mouvements suivants s'y ajoutent.
+ *
+ * Chaque comptage est conservé : c'est un historique, et seul le plus récent
+ * s'applique.
+ */
+export type CaisseCheck = {
+  id: string;
+  /** Ce qui a été compté dans la boîte. */
+  counted_cents: number;
+  /** Ce que l'app attendait à cet instant. */
+  computed_cents: number;
+  /** counted − computed. Positif : il y avait plus que prévu. */
+  adjust_cents: number;
+  created_at: number;
+};
+
 export type Sale = {
   id: string;
   concert_id: string;

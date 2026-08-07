@@ -203,6 +203,22 @@ export async function seedInitialStock() {
     });
   };
 
+  // Helpers pour créer toutes les tailles d'un T-shirt d'un coup.
+  // Femme = S, M, L, XL. Homme = S, M, L, XL, 2XL.
+  // Toutes les tailles sont créées, même à 0.
+  const HOMME_SIZES = ["S", "M", "L", "XL", "2XL"] as const;
+  const FEMME_SIZES = ["S", "M", "L", "XL"] as const;
+  const mkHomme = (fid: string, stocks: Partial<Record<(typeof HOMME_SIZES)[number], number>>) => {
+    HOMME_SIZES.forEach((s, i) => {
+      mkVar(fid, "Homme", s, stocks[s] ?? 0, 100 + i * 10);
+    });
+  };
+  const mkFemme = (fid: string, stocks: Partial<Record<(typeof FEMME_SIZES)[number], number>>) => {
+    FEMME_SIZES.forEach((s, i) => {
+      mkVar(fid, "Femme", s, stocks[s] ?? 0, 200 + i * 10);
+    });
+  };
+
   // CDs — pas de subcategory, pas de label
   const noNut = mkFam("CD — No Nut's no Glory", 1000, 10);
   const ep    = mkFam("CD — The EP with no names", 1000, 20);
@@ -212,35 +228,19 @@ export async function seedInitialStock() {
   mkVar(ep,    null, null, 71, 10);
   mkVar(anniv, null, null, 22, 10);
 
-  // T-shirt Negan (que Homme 2XL pour l'instant)
+  // T-shirt Negan — Homme uniquement, seul 2XL en stock
   const negan = mkFam("T-shirt Negan", 2000, 100);
-  mkVar(negan, "Homme", "2XL", 3, 160);
+  mkHomme(negan, { "2XL": 3 });
 
-  // T-shirt Ardenne Heavy — Homme + Femme unifiés
+  // T-shirt Ardenne Heavy
   const ah = mkFam("T-shirt Ardenne Heavy", 2000, 110);
-  // Homme
-  mkVar(ah, "Homme", "S",  9, 110);
-  mkVar(ah, "Homme", "M",  4, 120);
-  mkVar(ah, "Homme", "L",  8, 130);
-  mkVar(ah, "Homme", "XL", 1, 140);
-  // Femme
-  mkVar(ah, "Femme", "S",  8, 210);
-  mkVar(ah, "Femme", "M",  4, 220);
-  mkVar(ah, "Femme", "L",  4, 230);
-  mkVar(ah, "Femme", "XL", 1, 240);
+  mkHomme(ah, { S: 9, M: 4, L: 8, XL: 1 });
+  mkFemme(ah, { S: 8, M: 4, L: 4, XL: 1 });
 
-  // T-shirt Boris — Homme + Femme unifiés
+  // T-shirt Boris
   const boris = mkFam("T-shirt Boris", 2000, 120);
-  // Homme
-  mkVar(boris, "Homme", "S",   12, 110);
-  mkVar(boris, "Homme", "M",    9, 120);
-  mkVar(boris, "Homme", "L",   10, 130);
-  mkVar(boris, "Homme", "XL",   6, 140);
-  mkVar(boris, "Homme", "2XL",  3, 150);
-  // Femme
-  mkVar(boris, "Femme", "S",   7, 210);
-  mkVar(boris, "Femme", "M",   4, 220);
-  mkVar(boris, "Femme", "L",   2, 230);
+  mkHomme(boris, { S: 12, M: 9, L: 10, XL: 6, "2XL": 3 });
+  mkFemme(boris, { S: 7, M: 4, L: 2 });
 
   await batch.commit();
 }

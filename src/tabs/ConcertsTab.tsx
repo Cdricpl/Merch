@@ -1,14 +1,22 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, Plus, Trash2, Lock, RotateCcw, Banknote, QrCode } from "lucide-react";
+import {
+  ChevronLeft, Plus, Trash2, Lock, RotateCcw, Banknote, QrCode,
+  Wallet, ArrowDownLeft, Check, Undo2,
+} from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
-import { paymentLabel } from "../lib/payment";
-import { deleteConcert, updateConcert } from "../lib/db";
+import { PAYEES } from "../lib/payment";
+import { caisseFor } from "../lib/caisse";
+import {
+  createExpense, createSettlement, deleteConcert, deleteExpense,
+  deleteSettlement, updateConcert,
+} from "../lib/db";
 import { useBackHandler } from "../lib/useBackHandler";
-import { saleTotalCents, type Concert } from "../lib/types";
+import { saleTotalCents, type Concert, type Expense } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
 import { ConcertCard } from "../components/ConcertCard";
+import { CaisseBox } from "../components/CaisseBox";
 
 export function ConcertsTab() {
   const { concerts, sales } = useStore();
@@ -87,7 +95,7 @@ function ConcertDetail({
   onBack: () => void;
   onDeleted: () => void;
 }) {
-  const { families, variants, sales } = useStore();
+  const { families, variants, sales, expenses, settlements } = useStore();
   const [name, setName] = useState(concert.name);
   const [date, setDate] = useState(concert.concert_date);
   const [notes, setNotes] = useState(concert.notes ?? "");
@@ -97,6 +105,14 @@ function ConcertDetail({
   useBackHandler(true, onBack);
 
   const mySales = useMemo(() => sales.filter((s) => s.concert_id === concert.id), [sales, concert.id]);
+  const myExpenses = useMemo(
+    () => expenses.filter((e) => e.concert_id === concert.id),
+    [expenses, concert.id]
+  );
+  const mySettlements = useMemo(
+    () => settlements.filter((r) => r.concert_id === concert.id),
+    [settlements, concert.id]
+  );
 
   const byVariant = useMemo(() => {
     const m = new Map<string, { qty: number; cents: number }>();
@@ -134,29 +150,10 @@ function ConcertDetail({
   const totalItems = mySales.reduce((s, x) => s + x.quantity, 0);
   const totalDiscount = mySales.reduce((s, x) => s + (x.discount_cents ?? 0), 0);
 
-  // Qui détient quoi : le cash est dans la boîte, chaque QR est arrivé sur le
-  // compte d'un membre. C'est ce tableau qui sert à répartir en fin de soirée.
-  const byPayment = useMemo(() => {
-    const rows = new Map<string, { label: string; cents: number; items: number }>();
-    for (const s of mySales) {
-      const key = s.payment_method === "qr" ? `qr:${s.payment_payee ?? ""}` : (s.payment_method ?? "unknown");
-      const cur = rows.get(key) ?? {
-        label: paymentLabel(s.payment_method, s.payment_payee),
-        cents: 0,
-        items: 0,
-      };
-      cur.cents += saleTotalCents(s);
-      cur.items += s.quantity;
-      rows.set(key, cur);
-    }
-    // Cash d'abord, puis les QR par montant décroissant, « non renseigné » en fin.
-    return [...rows.entries()]
-      .sort(([ka, a], [kb, b]) => {
-        const rank = (k: string) => (k === "cash" ? 0 : k === "unknown" ? 2 : 1);
-        return rank(ka) - rank(kb) || b.cents - a.cents;
-      })
-      .map(([key, v]) => ({ key, ...v }));
-  }, [mySales]);
+  const caisse = useMemo(
+    () => caisseFor(concert, mySales, myExpenses, mySettlements),
+    [concert, mySales, myExpenses, mySettlements]
+  );
 
   const save = async () => {
     try {
@@ -182,9 +179,37 @@ function ConcertDetail({
   };
 
   const remove = async () => {
-    if (!confirm("Supprimer ce concert et toutes ses ventes ?")) return;
-    try { await deleteConcert(concert.id, mySales.map((s) => s.id)); onDeleted(); }
-    catch (e) { toast.error((e as Error).message); }
+    if (!confirm("Supprimer ce concert, ses ventes, ses dépenses et ses remises ?")) return;
+    try {
+      await deleteConcert(
+        concert.id,
+        mySales.map((s) => s.id),
+        myExpenses.map((e) => e.id),
+        mySettlements.map((r) => r.id),
+      );
+      onDeleted();
+    } catch (e) { toast.error((e as Error).message); }
+  };
+
+  /** Le membre rend ce qu'il détient encore pour ce concert. */
+  const settle = async (payee: string, cents: number) => {
+    if (cents === 0) return;
+    try {
+      await createSettlement(concert.id, payee, cents);
+      toast.success(`${payee} a remis ${formatEUR(cents)}`);
+    } catch (e) { toast.error((e as Error).message); }
+  };
+
+  const unsettle = async (payee: string) => {
+    const mine = mySettlements
+      .filter((r) => r.payee === payee)
+      .sort((a, b) => b.created_at - a.created_at);
+    const last = mine[0];
+    if (!last) return;
+    try {
+      await deleteSettlement(last.id);
+      toast.success("Remise annulée");
+    } catch (e) { toast.error((e as Error).message); }
   };
 
   return (
@@ -247,38 +272,59 @@ function ConcertDetail({
         />
       </div>
 
-      {/* Répartition de l'encaissement */}
-      {byPayment.length > 0 && (
+      <FeeEditor concert={concert} />
+
+      <CaisseBox state={caisse} />
+
+      {/* Qui détient encore de l'argent, et le bouton qui solde. */}
+      {caisse.debts.length > 0 && (
         <div className="space-y-2">
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            Qui a encaissé
+            Encaissé par les membres
           </div>
           <div className="card-surface rounded-2xl divide-y divide-border">
-            {byPayment.map((p) => (
-              <div key={p.key} className="flex items-center gap-3 px-3 py-2.5">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    p.key === "cash"
-                      ? "bg-emerald-600/20 text-emerald-500"
-                      : p.key === "unknown"
-                        ? "bg-muted text-muted-foreground"
-                        : "bg-primary/20 text-primary"
-                  }`}
-                >
-                  {p.key === "cash" ? <Banknote className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm truncate">{p.label}</div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {p.items} article{p.items > 1 ? "s" : ""}
+            {caisse.debts.map((d) => {
+              const done = d.remaining <= 0;
+              return (
+                <div key={d.payee} className="flex items-center gap-3 px-3 py-2.5">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                      done ? "bg-ok/20 text-ok" : "bg-primary/20 text-primary"
+                    }`}
+                  >
+                    {done ? <Check className="h-4 w-4" /> : <QrCode className="h-4 w-4" />}
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm truncate">{d.payee}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      encaissé {formatEUR(d.collected)}
+                      {d.settled > 0 && <> · remis {formatEUR(d.settled)}</>}
+                    </div>
+                  </div>
+                  {done ? (
+                    <button
+                      onClick={() => unsettle(d.payee)}
+                      className="shrink-0 inline-flex items-center gap-1 text-[11px] text-muted-foreground px-2 py-2 active:text-destructive"
+                    >
+                      <Undo2 className="h-3.5 w-3.5" /> Annuler
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => settle(d.payee, d.remaining)}
+                      className="shrink-0 inline-flex items-center gap-1.5 rounded-lg btn-primary text-[12px] font-semibold px-3 py-2 active:scale-95 transition"
+                    >
+                      <ArrowDownLeft className="h-3.5 w-3.5" />
+                      Remis {formatEUR(d.remaining)}
+                    </button>
+                  )}
                 </div>
-                <div className="font-display text-lg shrink-0">{formatEUR(p.cents)}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
+
+      <ExpenseList concertId={concert.id} expenses={myExpenses} />
 
       {/* Sales breakdown */}
       {grouped.length === 0 ? (
@@ -348,6 +394,185 @@ function ConcertDetail({
           <Lock className="h-4 w-4" /> Clôturer ce concert
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Saisie du cachet.
+ *
+ * Le mode de paiement n'est pas un détail cosmétique : un cachet en liquide
+ * entre dans la boîte, un cachet viré reste chez le membre crédité jusqu'à ce
+ * qu'il le rende. Se tromper ici fausse l'état de la caisse du montant du
+ * cachet, c'est-à-dire beaucoup.
+ */
+function FeeEditor({ concert }: { concert: Concert }) {
+  const cents = concert.fee_cents ?? 0;
+  const method = concert.fee_method ?? "cash";
+  const payee = concert.fee_payee ?? null;
+  const [draft, setDraft] = useState((cents / 100 || "").toString());
+
+  const save = async (patch: {
+    fee_cents?: number; fee_method?: "cash" | "virement"; fee_payee?: string | null;
+  }) => {
+    try { await updateConcert(concert.id, patch); }
+    catch (e) { toast.error((e as Error).message); }
+  };
+
+  const saveAmount = (raw: string) => {
+    const next = Math.max(0, Math.round(parseFloat(raw.replace(",", ".") || "0") * 100));
+    if (next === cents) return;
+    // Passer de « rien » à un montant sans mode choisi : le liquide est le cas
+    // courant, on l'inscrit explicitement plutôt que de le laisser implicite.
+    save({ fee_cents: next, fee_method: concert.fee_method ?? "cash" });
+  };
+
+  return (
+    <div className="card-surface rounded-2xl p-3.5 space-y-3">
+      <div className="flex items-center gap-2">
+        <Wallet className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Cachet</div>
+      </div>
+
+      <label className="rounded-xl bg-muted px-3 py-2 block">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Montant (€)</div>
+        <input
+          type="number" step="10" min={0} inputMode="decimal"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={(e) => saveAmount(e.target.value)}
+          placeholder="0"
+          className="w-full bg-transparent text-2xl font-display outline-none"
+        />
+      </label>
+
+      {cents > 0 && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => save({ fee_method: "cash", fee_payee: null })}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition ${
+                method === "cash" ? "bg-ok text-white" : "bg-muted/60 border border-border text-muted-foreground"
+              }`}
+            >
+              <Banknote className="h-4 w-4" /> Liquide
+            </button>
+            <button
+              onClick={() => save({ fee_method: "virement" })}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition ${
+                method === "virement" ? "btn-primary" : "bg-muted/60 border border-border text-muted-foreground"
+              }`}
+            >
+              <QrCode className="h-4 w-4" /> Virement
+            </button>
+          </div>
+
+          {method === "virement" && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
+                Viré sur le compte de
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {PAYEES.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => save({ fee_payee: p })}
+                    className={`rounded-lg py-2 text-[13px] font-semibold transition ${
+                      payee === p ? "btn-primary" : "bg-muted/60 border border-border text-muted-foreground"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+              {!payee && (
+                <p className="text-[11px] text-warn mt-1.5">
+                  Choisis un membre, sinon on ne saura pas qui doit le remettre.
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Ce qui sort de la caisse : essence, repas, achat de matériel… */
+function ExpenseList({ concertId, expenses }: { concertId: string; expenses: Expense[] }) {
+  const [label, setLabel] = useState("");
+  const [amount, setAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const total = expenses.reduce((s, e) => s + e.amount_cents, 0);
+
+  const add = async () => {
+    const cents = Math.round(parseFloat(amount.replace(",", ".") || "0") * 100);
+    if (!label.trim() || cents <= 0) return;
+    setBusy(true);
+    try {
+      await createExpense(concertId, label.trim(), cents);
+      setLabel("");
+      setAmount("");
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const remove = async (id: string) => {
+    try { await deleteExpense(id); }
+    catch (e) { toast.error((e as Error).message); }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Dépenses</div>
+        {total > 0 && <div className="text-[13px] text-destructive">−{formatEUR(total)}</div>}
+      </div>
+
+      {expenses.length > 0 && (
+        <div className="card-surface rounded-2xl divide-y divide-border">
+          {expenses.map((e) => (
+            <div key={e.id} className="flex items-center gap-3 px-3 py-2.5">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm truncate">{e.label}</div>
+              </div>
+              <div className="font-display text-lg shrink-0">{formatEUR(e.amount_cents)}</div>
+              <button
+                onClick={() => remove(e.id)}
+                aria-label="Supprimer la dépense"
+                className="shrink-0 w-8 h-8 flex items-center justify-center text-muted-foreground active:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Essence, repas…"
+          className="flex-1 min-w-0 rounded-xl bg-input border border-border px-3 py-2.5 text-sm"
+        />
+        <input
+          type="number" step="1" min={0} inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="€"
+          className="w-20 shrink-0 rounded-xl bg-input border border-border px-3 py-2.5 text-sm"
+        />
+        <button
+          onClick={add}
+          disabled={busy || !label.trim() || !amount}
+          aria-label="Ajouter la dépense"
+          className="shrink-0 w-11 rounded-xl btn-primary flex items-center justify-center disabled:opacity-40"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+      </div>
     </div>
   );
 }

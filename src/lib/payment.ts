@@ -14,12 +14,3 @@ export type Payment = {
 };
 
 export const CASH: Payment = { method: "cash", payee: null };
-
-/** Libellé court pour l'affichage (récap, listes). */
-export function paymentLabel(method: PaymentMethod | undefined, payee: string | null | undefined): string {
-  if (method === "qr") return payee ? `QR ${payee}` : "QR";
-  if (method === "cash") return "Cash";
-  // Ventes enregistrées avant l'ajout du suivi des paiements : on ne les compte
-  // ni en cash ni en QR, sous peine de fausser les comptes en silence.
-  return "Non renseigné";
-}

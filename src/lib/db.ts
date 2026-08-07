@@ -27,16 +27,58 @@ export async function createConcert(name: string, dateISO: string): Promise<stri
 
 export async function updateConcert(
   id: string,
-  patch: { name?: string; concert_date?: string; is_active?: boolean; is_closed?: boolean; notes?: string | null }
+  patch: {
+    name?: string; concert_date?: string; is_active?: boolean; is_closed?: boolean;
+    notes?: string | null;
+    fee_cents?: number; fee_method?: "cash" | "virement"; fee_payee?: string | null;
+  }
 ) {
   await updateDoc(doc(db, "concerts", id), patch);
 }
 
-export async function deleteConcert(id: string, saleIds: string[]) {
+export async function deleteConcert(
+  id: string,
+  saleIds: string[],
+  expenseIds: string[] = [],
+  settlementIds: string[] = [],
+) {
   const batch = writeBatch(db);
   for (const sid of saleIds) batch.delete(doc(db, "sales", sid));
+  // Sans ça, dépenses et remises survivraient à leur concert et viendraient
+  // fausser le total général avec de l'argent rattaché à rien.
+  for (const eid of expenseIds) batch.delete(doc(db, "expenses", eid));
+  for (const rid of settlementIds) batch.delete(doc(db, "settlements", rid));
   batch.delete(doc(db, "concerts", id));
   await batch.commit();
+}
+
+// -------- Caisse : dépenses et remises --------
+
+export async function createExpense(concertId: string, label: string, amountCents: number) {
+  await addDoc(collection(db, "expenses"), {
+    concert_id: concertId,
+    label,
+    amount_cents: Math.max(0, Math.round(amountCents)),
+    created_at: Date.now(),
+  });
+}
+
+export async function deleteExpense(id: string) {
+  await deleteDoc(doc(db, "expenses", id));
+}
+
+/** Un membre remet dans la boîte ce qu'il avait encaissé. */
+export async function createSettlement(concertId: string, payee: string, amountCents: number) {
+  await addDoc(collection(db, "settlements"), {
+    concert_id: concertId,
+    payee,
+    amount_cents: Math.round(amountCents),
+    created_at: Date.now(),
+  });
+}
+
+export async function deleteSettlement(id: string) {
+  await deleteDoc(doc(db, "settlements", id));
 }
 
 // -------- Families & variants --------

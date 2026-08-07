@@ -22,6 +22,41 @@ export type Concert = {
   is_active: boolean;
   is_closed?: boolean;
   notes: string | null;
+  /**
+   * Cachet du concert, en centimes. Absent tant qu'il n'a pas été saisi.
+   *
+   * Payé en liquide, il part directement dans la caisse. Viré sur le compte
+   * d'un membre, il se comporte exactement comme un QR : c'est ce membre qui
+   * détient l'argent tant qu'il ne l'a pas remis dans la boîte.
+   */
+  fee_cents?: number;
+  fee_method?: "cash" | "virement";
+  fee_payee?: string | null; // le membre crédité, pour un virement
+};
+
+/** Une sortie d'argent de la caisse : essence, repas, achat de matériel… */
+export type Expense = {
+  id: string;
+  concert_id: string;
+  label: string;
+  amount_cents: number;
+  created_at: number;
+};
+
+/**
+ * Un membre remet dans la boîte ce qu'il a encaissé (QR, ou cachet viré).
+ *
+ * On enregistre le MONTANT remis, et non un simple « c'est réglé » : une vente
+ * QR ajoutée après coup viendrait sinon se cacher derrière une case cochée. Le
+ * reste dû se recalcule toujours comme « ce qu'il a encaissé moins ce qu'il a
+ * rendu », donc plusieurs remises partielles fonctionnent aussi.
+ */
+export type Settlement = {
+  id: string;
+  concert_id: string;
+  payee: string;
+  amount_cents: number;
+  created_at: number;
 };
 
 export type Sale = {

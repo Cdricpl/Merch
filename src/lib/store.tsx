@@ -1,13 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { collection, onSnapshot, orderBy, query, type Query } from "firebase/firestore";
 import { db, kickConnection } from "./firebase";
-import type { Family, Variant, Concert, Sale } from "./types";
+import type { Family, Variant, Concert, Sale, Expense, Settlement } from "./types";
 
 type Store = {
   families: Family[];
   variants: Variant[];
   concerts: Concert[];
   sales: Sale[];
+  expenses: Expense[];
+  settlements: Settlement[];
   loading: boolean;
   /** Les écoutes temps réel sont tombées ; une reconnexion est en cours. */
   degraded: boolean;
@@ -25,6 +27,9 @@ const LS_PREFIX = "merch:v4:";
 // Au-delà de cette durée en arrière-plan, on considère la connexion temps réel
 // comme perdue et on la reconstruit au retour au premier plan.
 const STALE_AFTER_MS = 60_000;
+
+// Nombre d'écoutes temps réel : sert de repère pour savoir quand tout est arrivé.
+const SUBSCRIPTIONS = 6;
 
 function readCache<T>(name: string): T[] {
   try {
@@ -60,6 +65,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [variants, setVariants] = useState<Variant[]>(() => readCache<Variant>("variants"));
   const [concerts, setConcerts] = useState<Concert[]>(() => readCache<Concert>("concerts"));
   const [sales, setSales] = useState<Sale[]>(() => readCache<Sale>("sales"));
+  const [expenses, setExpenses] = useState<Expense[]>(() => readCache<Expense>("expenses"));
+  const [settlements, setSettlements] = useState<Settlement[]>(() => readCache<Settlement>("settlements"));
   const [loadCount, setLoadCount] = useState(0); // increments as each snapshot lands
   const [degraded, setDegraded] = useState(false);
 
@@ -71,6 +78,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useDeferredCache("variants", variants);
   useDeferredCache("concerts", concerts);
   useDeferredCache("sales", sales);
+  useDeferredCache("expenses", expenses);
+  useDeferredCache("settlements", settlements);
 
   /** Reconstruit la connexion puis se réabonne. */
   const resync = useCallback(() => {
@@ -87,7 +96,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const onData = () => {
       attemptRef.current = 0;
       setDegraded(false);
-      setLoadCount((n) => Math.min(n + 1, 4));
+      setLoadCount((n) => Math.min(n + 1, SUBSCRIPTIONS));
     };
 
     // onSnapshot SANS callback d'erreur détache l'écoute DÉFINITIVEMENT et en
@@ -119,6 +128,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     sub<Variant>(query(collection(db, "variants"), orderBy("sort_order")), setVariants);
     sub<Concert>(query(collection(db, "concerts"), orderBy("concert_date", "desc")), setConcerts);
     sub<Sale>(query(collection(db, "sales"), orderBy("created_at", "desc")), setSales);
+    sub<Expense>(query(collection(db, "expenses"), orderBy("created_at", "desc")), setExpenses);
+    sub<Settlement>(query(collection(db, "settlements"), orderBy("created_at", "desc")), setSettlements);
 
     return () => {
       restarting = true;
@@ -150,10 +161,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   }, [resync]);
 
-  const loading = loadCount < 4 && families.length === 0;
+  const loading = loadCount < SUBSCRIPTIONS && families.length === 0;
 
   return (
-    <Ctx.Provider value={{ families, variants, concerts, sales, loading, degraded }}>
+    <Ctx.Provider value={{ families, variants, concerts, sales, expenses, settlements, loading, degraded }}>
       {children}
     </Ctx.Provider>
   );

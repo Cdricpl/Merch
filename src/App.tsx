@@ -1,17 +1,19 @@
 import { Component, useState, type ReactNode } from "react";
-import { ShoppingCart, Flame, Boxes } from "lucide-react";
+import { ShoppingCart, Flame, Boxes, Wallet } from "lucide-react";
 import { Toaster } from "sonner";
 import { StoreProvider, useStore } from "./lib/store";
 import { ActiveConcertProvider } from "./lib/activeConcert";
 import { SalesTab } from "./tabs/SalesTab";
 import { StockTab } from "./tabs/StockTab";
 import { ConcertsTab } from "./tabs/ConcertsTab";
+import { CaisseTab } from "./tabs/CaisseTab";
 import { PasscodeGate } from "./components/PasscodeGate";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { LOGO_URL } from "./lib/assets";
 
-// Trois onglets, rien d'autre : c'est tout ce qui sert au stand.
-type Tab = "sales" | "concerts" | "stock";
+// Ce qui sert au stand, et rien de plus. « Caisse » porte le total général :
+// il traverse les concerts, donc il ne pouvait pas vivre sur une fiche.
+type Tab = "sales" | "concerts" | "stock" | "caisse";
 
 async function hardRefresh() {
   try {
@@ -125,6 +127,7 @@ function Shell() {
           {tab === "sales" && <SalesTab />}
           {tab === "concerts" && <ConcertsTab />}
           {tab === "stock" && <StockTab key={stockKey} />}
+          {tab === "caisse" && <CaisseTab />}
         </main>
 
         <nav
@@ -135,6 +138,7 @@ function Shell() {
             <TabBtn active={tab === "sales"} onClick={() => setTab("sales")} icon={<ShoppingCart />} label="Ventes" />
             <TabBtn active={tab === "concerts"} onClick={() => setTab("concerts")} icon={<Flame />} label="Concerts" />
             <TabBtn active={tab === "stock"} onClick={goStock} icon={<Boxes />} label="Stock" />
+            <TabBtn active={tab === "caisse"} onClick={() => setTab("caisse")} icon={<Wallet />} label="Caisse" />
           </div>
         </nav>
       </div>

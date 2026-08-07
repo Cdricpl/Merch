@@ -1,10 +1,15 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { ArrowDownLeft, ClipboardCheck, Plus, QrCode, Trash2, X } from "lucide-react";
+import {
+  ArrowDownLeft, Banknote, ClipboardCheck, Plus, QrCode, Trash2, Wallet, X,
+} from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
-import { caisseFor, caisseTotal, type CaisseState } from "../lib/caisse";
+import {
+  boxBalance, boxMovements, payeeDebts, settlementPlan, summariseMovements,
+  totalOwed, unknownSalesCents, type Movement, type PayeeDebt,
+} from "../lib/caisse";
 import {
   createExpense, createSettlements, deleteExpense, deleteSettlements,
   recordCaisseCheck,
@@ -13,78 +18,37 @@ import { useBackHandler } from "../lib/useBackHandler";
 import { CaisseBox } from "../components/CaisseBox";
 import type { Concert, Expense } from "../lib/types";
 
-// Support du panier « rattaché à aucun concert ». Sans cachet, il n'apporte
-// rien de lui-même : il ne sert qu'à faire passer les lignes orphelines par le
-// même calcul que les autres.
-const NO_CONCERT: Concert = {
-  id: "", name: "", concert_date: "", is_active: false, notes: null,
-};
+const dateFR = (ms: number) =>
+  new Date(ms).toLocaleDateString("fr-BE", { day: "2-digit", month: "long", year: "numeric" });
 
 /**
- * L'écran de l'argent : ce que la boîte devrait contenir, qui doit encore
- * quelque chose, et ce qui est sorti.
+ * L'écran de l'argent.
  *
- * Tout est réuni ici plutôt qu'éparpillé sur les fiches de concert : on fait
- * ses comptes en une fois, pas soirée par soirée.
+ * Trois questions, dans cet ordre : combien y a-t-il dans la boîte, d'où vient
+ * ce chiffre, et qui doit encore quelque chose.
  */
 export function CaisseTab() {
   const { concerts, sales, expenses, settlements, caisseChecks, loading } = useStore();
   const [countOpen, setCountOpen] = useState(false);
 
-  // Un seul passage sur chaque collection pour répartir les lignes par concert,
-  // plutôt qu'un filtre complet par concert (qui serait quadratique).
-  //
-  // Tout ce qui ne retombe sur aucun concert connu va dans un panier à part :
-  // une dépense sans concert, mais aussi une ligne dont le concert a été
-  // supprimé. Sans lui, cet argent n'était visité par personne et s'évaporait
-  // du total sans un mot.
-  const { rows, orphan } = useMemo(() => {
-    const known = new Set(concerts.map((c) => c.id));
-    const salesBy = new Map<string, typeof sales>();
-    const expBy = new Map<string, typeof expenses>();
-    const setBy = new Map<string, typeof settlements>();
-    const looseSales: typeof sales = [];
-    const looseExpenses: typeof expenses = [];
-    const looseSettlements: typeof settlements = [];
-
-    for (const s of sales) {
-      if (!known.has(s.concert_id)) { looseSales.push(s); continue; }
-      const a = salesBy.get(s.concert_id);
-      if (a) a.push(s); else salesBy.set(s.concert_id, [s]);
-    }
-    for (const e of expenses) {
-      if (!e.concert_id || !known.has(e.concert_id)) { looseExpenses.push(e); continue; }
-      const a = expBy.get(e.concert_id);
-      if (a) a.push(e); else expBy.set(e.concert_id, [e]);
-    }
-    for (const r of settlements) {
-      if (!known.has(r.concert_id)) { looseSettlements.push(r); continue; }
-      const a = setBy.get(r.concert_id);
-      if (a) a.push(r); else setBy.set(r.concert_id, [r]);
-    }
-
-    return {
-      rows: concerts.map((c) => ({
-        concert: c,
-        state: caisseFor(c, salesBy.get(c.id) ?? [], expBy.get(c.id) ?? [], setBy.get(c.id) ?? []),
-      })),
-      orphan: caisseFor(NO_CONCERT, looseSales, looseExpenses, looseSettlements),
-    };
-  }, [concerts, sales, expenses, settlements]);
-
-  // Seul le comptage le plus récent s'applique ; les précédents restent comme
-  // historique. La liste arrive déjà triée du plus récent au plus ancien.
-  const adjust = caisseChecks[0]?.adjust_cents ?? 0;
-  const lastCheck = caisseChecks[0];
-
-  const total = useMemo(
-    () => caisseTotal([...rows.map((r) => r.state), orphan], adjust),
-    [rows, orphan, adjust]
+  const movements = useMemo(
+    () => boxMovements(concerts, sales, expenses, settlements),
+    [concerts, sales, expenses, settlements]
+  );
+  // Les comptages arrivent du plus récent au plus ancien ; seul le dernier sert
+  // de point de départ.
+  const lastCount = caisseChecks[0] ?? null;
+  const { balance, anchor, since } = useMemo(
+    () => boxBalance(movements, lastCount),
+    [movements, lastCount]
   );
 
-  // Ce que l'app compterait sans le report : c'est cette valeur que le prochain
-  // comptage doit corriger.
-  const withoutAdjust = total.inBox - adjust;
+  const debts = useMemo(
+    () => payeeDebts(concerts, sales, settlements),
+    [concerts, sales, settlements]
+  );
+  const owed = totalOwed(debts);
+  const unknown = useMemo(() => unknownSalesCents(sales), [sales]);
 
   if (loading) {
     return <div className="px-6 py-12 text-center text-muted-foreground">Chargement…</div>;
@@ -94,7 +58,7 @@ export function CaisseTab() {
     <div className="px-4 pt-1 pb-4 space-y-4">
       <h1 className="font-display text-[22px]">Caisse</h1>
 
-      <CaisseBox state={total} title="Total général" />
+      <CaisseBox balance={balance} owed={owed} unknownSales={unknown} />
 
       <button
         onClick={() => setCountOpen(true)}
@@ -102,26 +66,21 @@ export function CaisseTab() {
       >
         <ClipboardCheck className="h-4 w-4" /> J'ai compté la caisse
       </button>
-      {lastCheck && (
-        <p className="text-[11px] text-muted-foreground -mt-2 px-1">
-          Dernier comptage : {formatEUR(lastCheck.counted_cents)} le{" "}
-          {new Date(lastCheck.created_at).toLocaleDateString("fr-BE", {
-            day: "2-digit", month: "long", year: "numeric",
-          })}.
-        </p>
-      )}
 
-      <MemberDebts total={total} perConcert={rows} />
+      <Journal anchor={anchor} since={since} balance={balance} />
+
+      <MemberDebts
+        debts={debts}
+        concerts={concerts}
+        sales={sales}
+        settlements={settlements}
+      />
 
       <ExpenseList expenses={expenses} concerts={concerts} />
 
       {countOpen &&
         createPortal(
-          <CountSheet
-            claimed={total.inBox}
-            raw={withoutAdjust}
-            onClose={() => setCountOpen(false)}
-          />,
+          <CountSheet balance={balance} onClose={() => setCountOpen(false)} />,
           document.body
         )}
     </div>
@@ -129,45 +88,113 @@ export function CaisseTab() {
 }
 
 /**
+ * D'où vient le solde.
+ *
+ * Le comptage sert de point de départ, et tout ce qui a bougé depuis s'y
+ * ajoute, ligne par ligne. C'est la seule façon de pouvoir vérifier le chiffre
+ * plutôt que de le croire sur parole.
+ */
+function Journal({ anchor, since, balance }: {
+  anchor: { counted_cents: number; created_at: number } | null;
+  since: Movement[];
+  balance: number;
+}) {
+  const lignes = useMemo(() => summariseMovements(since), [since]);
+
+  if (!anchor && lignes.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        {anchor ? "Depuis le dernier comptage" : "Mouvements"}
+      </div>
+
+      <div className="card-surface rounded-2xl divide-y divide-border">
+        {anchor && (
+          <div className="flex items-center gap-3 px-3 py-2.5">
+            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+              <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm">Caisse comptée</div>
+              <div className="text-[11px] text-muted-foreground">{dateFR(anchor.created_at)}</div>
+            </div>
+            <div className="font-display text-lg shrink-0">{formatEUR(anchor.counted_cents)}</div>
+          </div>
+        )}
+
+        {lignes.map((m) => (
+          <div key={m.key} className="flex items-center gap-3 px-3 py-2.5">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                m.cents < 0 ? "bg-destructive/15 text-destructive" : "bg-ok/15 text-ok"
+              }`}
+            >
+              {m.kind === "expense" ? <Trash2 className="h-4 w-4" />
+                : m.kind === "settlement" ? <ArrowDownLeft className="h-4 w-4" />
+                : m.kind === "fee" ? <Wallet className="h-4 w-4" />
+                : <Banknote className="h-4 w-4" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm truncate">{m.label}</div>
+              <div className="text-[11px] text-muted-foreground truncate">
+                {m.detail ? `${m.detail} · ` : ""}{dateFR(m.at)}
+              </div>
+            </div>
+            <div className={`font-display text-lg shrink-0 ${m.cents < 0 ? "text-destructive" : ""}`}>
+              {m.cents < 0 ? "−" : "+"}{formatEUR(Math.abs(m.cents))}
+            </div>
+          </div>
+        ))}
+
+        {anchor && lignes.length === 0 && (
+          <div className="px-3 py-3 text-[13px] text-muted-foreground">
+            Rien n'a bougé depuis.
+          </div>
+        )}
+
+        {lignes.length > 0 && (
+          <div className="flex items-center justify-between px-3 py-2.5 bg-muted/20">
+            <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              Solde
+            </span>
+            <span className="font-display text-xl text-primary">{formatEUR(balance)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Qui détient encore de l'argent, et le bouton qui solde.
  *
- * Un membre peut devoir sur plusieurs soirées à la fois. Le solder soirée par
- * soirée serait absurde — il rend tout d'un coup —, donc le bouton règle son
- * total et écrit dans l'ombre une ligne par concert concerné, ce qui garde le
- * détail juste.
- *
- * Un membre soldé quitte la liste : il n'y reste que ce qui appelle une action.
+ * Un membre soldé quitte la liste : il n'y reste que ce qui appelle un geste.
  * L'annulation part donc avec lui, et se rattrape dans la notification — sans
  * quoi une erreur de tap serait sans retour.
  */
-function MemberDebts({
-  total, perConcert,
-}: {
-  total: CaisseState;
-  perConcert: Array<{ concert: Concert; state: CaisseState }>;
+function MemberDebts({ debts, concerts, sales, settlements }: {
+  debts: PayeeDebt[];
+  concerts: Concert[];
+  sales: Parameters<typeof settlementPlan>[1];
+  settlements: Parameters<typeof settlementPlan>[2];
 }) {
-  const owing = total.debts.filter((d) => d.remaining > 0);
+  const owing = debts.filter((d) => d.remaining > 0);
   if (owing.length === 0) return null;
 
   const settle = async (payee: string) => {
-    const entries = perConcert
-      .map(({ concert, state }) => {
-        const d = state.debts.find((x) => x.payee === payee);
-        return d && d.remaining > 0
-          ? { concertId: concert.id, payee, amountCents: d.remaining }
-          : null;
-      })
-      .filter((x): x is { concertId: string; payee: string; amountCents: number } => x !== null);
-    if (entries.length === 0) {
-      // Le dû ne vient que de ventes dont le concert a disparu : il n'y a plus
-      // de fiche où inscrire la remise. Le dire vaut mieux qu'un bouton qui ne
-      // fait rien.
+    const plan = settlementPlan(concerts, sales, settlements, payee);
+    if (plan.length === 0) {
+      // Le dû ne vient que de concerts supprimés : il n'y a plus de fiche où
+      // inscrire la remise. Le dire vaut mieux qu'un bouton qui ne fait rien.
       toast.error("Ce solde vient d'un concert supprimé : impossible de l'enregistrer.");
       return;
     }
-    const sum = entries.reduce((n, e) => n + e.amountCents, 0);
+    const sum = plan.reduce((n, e) => n + e.amountCents, 0);
     try {
-      const ids = await createSettlements(entries);
+      const ids = await createSettlements(
+        plan.map((e) => ({ concertId: e.concertId, payee, amountCents: e.amountCents }))
+      );
       toast.success(`${payee} a remis ${formatEUR(sum)}`, {
         action: {
           label: "Annuler",
@@ -277,7 +304,7 @@ function ExpenseList({ expenses, concerts }: { expenses: Expense[]; concerts: Co
       )}
       {hidden > 0 && (
         <p className="text-[11px] text-muted-foreground px-1">
-          + {hidden} dépense{hidden > 1 ? "s" : ""} plus ancienne{hidden > 1 ? "s" : ""}, toujours comptée{hidden > 1 ? "s" : ""} dans le total.
+          + {hidden} dépense{hidden > 1 ? "s" : ""} plus ancienne{hidden > 1 ? "s" : ""}.
         </p>
       )}
 
@@ -311,34 +338,25 @@ function ExpenseList({ expenses, concerts }: { expenses: Expense[]; concerts: Co
 /**
  * Comptage réel de la boîte.
  *
- * L'app additionne ce qu'elle connaît, mais la boîte contenait déjà de l'argent
- * avant qu'elle n'existe. Plutôt que de demander une « somme de départ » — un
- * chiffre que personne ne retrouve jamais — on demande ce qu'il y a MAINTENANT,
- * et on en déduit l'écart. Le total repart de la réalité.
+ * Il ne corrige pas un total : il en pose un NOUVEAU point de départ, daté.
+ * Tout ce qui bougera après s'y ajoutera, et ce qu'on saisira plus tard à
+ * propos d'avant ne le touchera plus — cet argent était déjà dans ce qu'on
+ * vient de compter.
  */
-function CountSheet({ claimed, raw, onClose }: {
-  /** Ce que l'app affiche aujourd'hui, report compris — la valeur à comparer. */
-  claimed: number;
-  /** La même chose SANS le report : c'est elle que le nouvel écart corrige. */
-  raw: number;
-  onClose: () => void;
-}) {
+function CountSheet({ balance, onClose }: { balance: number; onClose: () => void }) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   useBackHandler(true, onClose);
 
   const counted = Math.round(parseFloat(value.replace(",", ".") || "0") * 100);
   const valid = value.trim() !== "" && Number.isFinite(counted) && counted >= 0;
-  // L'écart montré est celui qui parle : la dérive depuis le dernier comptage.
-  // Le report enregistré, lui, se calcule sur la valeur brute — sinon le report
-  // précédent serait compté deux fois.
-  const delta = counted - claimed;
+  const delta = counted - balance;
 
   const submit = async () => {
     if (!valid) return;
     setBusy(true);
     try {
-      await recordCaisseCheck(counted, raw);
+      await recordCaisseCheck(counted, balance);
       toast.success("Caisse recalée");
       onClose();
     } catch (e) {
@@ -383,7 +401,7 @@ function CountSheet({ claimed, raw, onClose }: {
         <div className="rounded-xl bg-muted/40 border border-border/60 p-3 space-y-1.5">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">L'app comptait</span>
-            <span>{formatEUR(claimed)}</span>
+            <span>{formatEUR(balance)}</span>
           </div>
           {valid && (
             <div className="flex items-center justify-between text-sm border-t border-border/60 pt-1.5">
@@ -396,12 +414,10 @@ function CountSheet({ claimed, raw, onClose }: {
           )}
         </div>
 
-        {valid && delta !== 0 && (
-          <p className="text-[11px] text-muted-foreground">
-            L'écart est retenu comme report : à partir de maintenant, le total
-            part de {formatEUR(counted)} et les ventes s'y ajoutent.
-          </p>
-        )}
+        <p className="text-[11px] text-muted-foreground">
+          Le comptage devient le nouveau point de départ : le solde repart de ce
+          montant, et seuls les mouvements suivants s'y ajouteront.
+        </p>
 
         <button
           onClick={submit}

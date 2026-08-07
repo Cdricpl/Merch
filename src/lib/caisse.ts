@@ -1,179 +1,247 @@
-// Ce que la boîte doit contenir, et qui doit encore de l'argent.
+// La comptabilité de la caisse.
 //
-// Toute l'arithmétique de la caisse vit ici, et nulle part ailleurs : c'est le
-// seul moyen que la fiche d'un concert et le total général ne finissent pas par
-// raconter deux histoires différentes.
+// Toute l'arithmétique vit ici, et nulle part ailleurs.
 //
-// Le principe tient en une phrase : l'argent est soit dans la boîte, soit sur
-// le compte d'un membre. Une vente en liquide et un cachet en liquide entrent
-// dans la boîte ; un QR et un cachet viré atterrissent chez un membre et n'y
-// entrent que le jour où il les rend (une « remise »). Les dépenses en sortent.
+// ── Le principe ──────────────────────────────────────────────────────────
+// L'argent est soit dans la boîte, soit sur le compte d'un membre.
+//   · une vente en liquide et un cachet en liquide ENTRENT dans la boîte ;
+//   · un QR et un cachet viré atterrissent chez un membre : ils n'entrent dans
+//     la boîte que le jour où il les rend (une « remise ») ;
+//   · une dépense en SORT.
+//
+// ── Pourquoi un journal daté, et pas une somme ───────────────────────────
+// La première version additionnait tout et ajoutait un « report » figé au
+// moment du comptage. Elle comptait donc DEUX FOIS tout ce qu'on saisissait
+// après coup à propos du passé : compter 1684 € puis inscrire le cachet d'un
+// concert déjà encaissé faisait afficher 2084 € alors que la boîte n'avait pas
+// bougé.
+//
+// Un comptage est désormais un POINT DE DÉPART daté : il dit ce que la boîte
+// contenait à cet instant, et seuls les mouvements POSTÉRIEURS s'y ajoutent.
+// Inscrire après coup une dépense d'il y a trois mois ne change donc plus le
+// solde — cet argent était déjà sorti quand on a compté. Et rien n'oblige à
+// deviner ce qui était compris dans le comptage : la date suffit.
 
 import { PAYEES } from "./payment";
-import { saleTotalCents, type Concert, type Expense, type Sale, type Settlement } from "./types";
+import { saleTotalCents, type CaisseCheck, type Concert, type Expense, type Sale, type Settlement } from "./types";
+
+export type MovementKind = "sale" | "fee" | "settlement" | "expense";
+
+/** Une entrée ou une sortie de la boîte, datée. */
+export type Movement = {
+  key: string;
+  at: number;
+  kind: MovementKind;
+  label: string;
+  detail?: string;
+  /** Positif : l'argent entre. Négatif : il sort. */
+  cents: number;
+};
 
 export type PayeeDebt = {
   payee: string;
-  /** Ce que ce membre a encaissé pour ce concert (QR + cachet viré). */
+  /** Ce que ce membre a encaissé (QR + cachet viré). */
   collected: number;
   /** Ce qu'il a déjà remis dans la boîte. */
   settled: number;
-  /** Ce qu'il doit encore. Négatif si trop remis — on l'affiche tel quel. */
   remaining: number;
 };
 
-export type CaisseState = {
-  /** Ventes encaissées en liquide. */
-  cashSales: number;
-  /** Cachet reçu en liquide. */
-  feeCash: number;
-  /** Remises : ce que les membres ont rendu. */
-  settled: number;
-  /** Sorties d'argent. */
-  expenses: number;
-  /**
-   * Écart du dernier comptage réel : ce que la boîte contenait déjà avant que
-   * l'app ne suive quoi que ce soit, plus tout ce qui a pu s'égarer depuis.
-   * Global, donc toujours nul au niveau d'un concert isolé.
-   */
-  adjust: number;
-  /** Ce que la boîte doit contenir. */
-  inBox: number;
-  /** Total encore détenu par les membres. */
-  owed: number;
-  debts: PayeeDebt[];
-  /**
-   * Ventes d'avant le suivi des paiements. Elles ne sont rangées ni en liquide
-   * ni en QR, donc pas comptées dans la boîte : on ne peut pas deviner où cet
-   * argent est passé, et l'inventer ferait mentir le total.
-   */
-  unknownSales: number;
-};
-
-const EMPTY_DEBT = (payee: string): PayeeDebt => ({
-  payee, collected: 0, settled: 0, remaining: 0,
-});
-
 /**
- * État de la caisse pour UN concert.
+ * Tous les mouvements de la boîte, du plus ancien au plus récent.
  *
- * Les tableaux reçus doivent déjà être filtrés sur ce concert : le filtrage est
- * laissé à l'appelant, qui le fait une seule fois pour tous les concerts quand
- * il calcule le total général.
+ * Les ventes QR n'y figurent pas : cet argent n'a jamais touché la boîte, il
+ * n'y entre que par la remise du membre. Les ventes sans moyen de paiement non
+ * plus — on ne peut pas deviner où elles sont passées.
  */
-export function caisseFor(
-  concert: Concert,
+export function boxMovements(
+  concerts: Concert[],
   sales: Sale[],
   expenses: Expense[],
   settlements: Settlement[],
-): CaisseState {
-  let cashSales = 0;
-  let unknownSales = 0;
+): Movement[] {
+  const nameOf = new Map(concerts.map((c) => [c.id, c.name]));
+  const out: Movement[] = [];
 
+  for (const s of sales) {
+    if (s.payment_method !== "cash") continue;
+    out.push({
+      key: `s:${s.id}`,
+      at: s.created_at,
+      kind: "sale",
+      label: nameOf.get(s.concert_id) ?? "Concert supprimé",
+      detail: "ventes en liquide",
+      cents: saleTotalCents(s),
+    });
+  }
+
+  for (const c of concerts) {
+    const fee = c.fee_cents ?? 0;
+    if (fee <= 0 || c.fee_method === "virement") continue;
+    out.push({
+      key: `f:${c.id}`,
+      // Les cachets saisis avant que la date ne soit enregistrée retombent sur
+      // la date du concert : c'est le moment où l'argent a changé de mains.
+      at: c.fee_at ?? (Date.parse(c.concert_date) || 0),
+      kind: "fee",
+      label: c.name,
+      detail: "cachet en liquide",
+      cents: fee,
+    });
+  }
+
+  for (const r of settlements) {
+    out.push({
+      key: `r:${r.id}`,
+      at: r.created_at,
+      kind: "settlement",
+      label: `${r.payee} a remis`,
+      cents: r.amount_cents,
+    });
+  }
+
+  for (const e of expenses) {
+    out.push({
+      key: `e:${e.id}`,
+      at: e.created_at,
+      kind: "expense",
+      label: e.label,
+      detail: e.concert_id ? nameOf.get(e.concert_id) : undefined,
+      cents: -e.amount_cents,
+    });
+  }
+
+  return out.sort((a, b) => a.at - b.at);
+}
+
+export type BoxBalance = {
+  /** Ce que la boîte devrait contenir. */
+  balance: number;
+  /** Le comptage qui sert de point de départ, s'il y en a un. */
+  anchor: CaisseCheck | null;
+  /** Les mouvements postérieurs au comptage : ceux qui expliquent le solde. */
+  since: Movement[];
+};
+
+/**
+ * Le solde de la boîte.
+ *
+ * Sans comptage, c'est la somme de tous les mouvements connus — forcément
+ * incomplète tant que personne n'a dit ce qu'il y avait au départ.
+ */
+export function boxBalance(movements: Movement[], lastCount: CaisseCheck | null): BoxBalance {
+  if (!lastCount) {
+    return { balance: sum(movements), anchor: null, since: movements };
+  }
+  const since = movements.filter((m) => m.at > lastCount.created_at);
+  return { balance: lastCount.counted_cents + sum(since), anchor: lastCount, since };
+}
+
+const sum = (ms: Movement[]) => ms.reduce((n, m) => n + m.cents, 0);
+
+/**
+ * Regroupe les mouvements pour l'affichage : une ligne par concert pour les
+ * ventes, une par membre pour les remises. Les dépenses et les cachets restent
+ * détaillés, chacun ayant déjà son propre libellé.
+ */
+export function summariseMovements(movements: Movement[]): Movement[] {
+  const grouped = new Map<string, Movement>();
+  for (const m of movements) {
+    const key = m.kind === "sale" || m.kind === "settlement" ? `${m.kind}|${m.label}` : m.key;
+    const cur = grouped.get(key);
+    if (cur) {
+      cur.cents += m.cents;
+      cur.at = Math.max(cur.at, m.at);
+    } else {
+      grouped.set(key, { ...m, key });
+    }
+  }
+  return [...grouped.values()].sort((a, b) => b.at - a.at);
+}
+
+/**
+ * Ce que chaque membre détient encore.
+ *
+ * Indépendant du comptage : cet argent n'est pas dans la boîte, un comptage de
+ * la boîte n'en dit donc rien.
+ */
+export function payeeDebts(
+  concerts: Concert[],
+  sales: Sale[],
+  settlements: Settlement[],
+): PayeeDebt[] {
   const byPayee = new Map<string, PayeeDebt>();
   const debtFor = (payee: string) => {
     let d = byPayee.get(payee);
-    if (!d) { d = EMPTY_DEBT(payee); byPayee.set(payee, d); }
+    if (!d) { d = { payee, collected: 0, settled: 0, remaining: 0 }; byPayee.set(payee, d); }
     return d;
   };
 
   for (const s of sales) {
-    const cents = saleTotalCents(s);
-    if (s.payment_method === "cash") {
-      cashSales += cents;
-    } else if (s.payment_method === "qr") {
-      // Un QR sans nom de membre reste un QR : l'argent n'est pas dans la boîte.
-      // On le range sous « ? » plutôt que de le perdre.
-      debtFor(s.payment_payee || "?").collected += cents;
-    } else {
-      unknownSales += cents;
-    }
+    if (s.payment_method !== "qr") continue;
+    // Un QR sans nom reste un QR : l'argent n'est pas dans la boîte. On le range
+    // sous « ? » plutôt que de le perdre.
+    debtFor(s.payment_payee || "?").collected += saleTotalCents(s);
   }
-
-  const fee = concert.fee_cents ?? 0;
-  let feeCash = 0;
-  if (fee > 0) {
-    if (concert.fee_method === "virement") {
-      debtFor(concert.fee_payee || "?").collected += fee;
-    } else {
-      // Par défaut le cachet est du liquide : c'est le cas courant, et un
-      // cachet saisi sans mode précisé est bien dans la boîte.
-      feeCash += fee;
-    }
+  for (const c of concerts) {
+    const fee = c.fee_cents ?? 0;
+    if (fee > 0 && c.fee_method === "virement") debtFor(c.fee_payee || "?").collected += fee;
   }
-
-  let settled = 0;
   for (const r of settlements) {
-    settled += r.amount_cents;
     debtFor(r.payee).settled += r.amount_cents;
   }
 
-  let expensesTotal = 0;
-  for (const e of expenses) expensesTotal += e.amount_cents;
-
-  let owed = 0;
-  for (const d of byPayee.values()) {
-    d.remaining = d.collected - d.settled;
-    owed += d.remaining;
-  }
-
-  // Ordre stable : les membres connus d'abord, dans l'ordre de PAYEES, puis
-  // tout nom inattendu (ancien membre, QR sans nom).
   const rank = (p: string) => {
     const i = PAYEES.indexOf(p as (typeof PAYEES)[number]);
     return i === -1 ? PAYEES.length : i;
   };
-  const debts = [...byPayee.values()]
+  return [...byPayee.values()]
+    .map((d) => ({ ...d, remaining: d.collected - d.settled }))
     .filter((d) => d.collected !== 0 || d.settled !== 0)
     .sort((a, b) => rank(a.payee) - rank(b.payee) || a.payee.localeCompare(b.payee));
-
-  return {
-    cashSales,
-    feeCash,
-    settled,
-    expenses: expensesTotal,
-    adjust: 0,
-    inBox: cashSales + feeCash + settled - expensesTotal,
-    owed,
-    debts,
-    unknownSales,
-  };
 }
 
-/**
- * Somme des états de tous les concerts, plus l'écart du dernier comptage : le
- * contenu réel de la boîte.
- */
-export function caisseTotal(states: CaisseState[], adjust = 0): CaisseState {
-  const merged = new Map<string, PayeeDebt>();
-  const out: CaisseState = {
-    cashSales: 0, feeCash: 0, settled: 0, expenses: 0, adjust,
-    inBox: adjust, owed: 0, debts: [], unknownSales: 0,
-  };
+/** Ventes d'avant le suivi des paiements : ni liquide, ni QR, donc nulle part. */
+export function unknownSalesCents(sales: Sale[]): number {
+  let n = 0;
+  for (const s of sales) if (!s.payment_method) n += saleTotalCents(s);
+  return n;
+}
 
-  for (const s of states) {
-    out.cashSales += s.cashSales;
-    out.feeCash += s.feeCash;
-    out.settled += s.settled;
-    out.expenses += s.expenses;
-    out.inBox += s.inBox;
-    out.owed += s.owed;
-    out.unknownSales += s.unknownSales;
-    for (const d of s.debts) {
-      const m = merged.get(d.payee) ?? EMPTY_DEBT(d.payee);
-      m.collected += d.collected;
-      m.settled += d.settled;
-      m.remaining += d.remaining;
-      merged.set(d.payee, m);
-    }
+/** Ce que les membres détiennent encore, tous concerts confondus. */
+export const totalOwed = (debts: PayeeDebt[]) => debts.reduce((n, d) => n + d.remaining, 0);
+
+/**
+ * Ce qu'un membre doit encore, concert par concert.
+ *
+ * Le bouton « Remis » règle son total d'un geste, mais la remise s'inscrit
+ * concert par concert : c'est ce qui garde le détail de chaque soirée juste.
+ * Les concerts disparus sont écartés — on ne peut plus rien y inscrire.
+ */
+export function settlementPlan(
+  concerts: Concert[],
+  sales: Sale[],
+  settlements: Settlement[],
+  payee: string,
+): Array<{ concertId: string; amountCents: number }> {
+  const byConcert = new Map<string, number>();
+  const add = (id: string, cents: number) =>
+    byConcert.set(id, (byConcert.get(id) ?? 0) + cents);
+
+  for (const s of sales) {
+    if (s.payment_method !== "qr" || (s.payment_payee || "?") !== payee) continue;
+    add(s.concert_id, saleTotalCents(s));
+  }
+  for (const c of concerts) {
+    const fee = c.fee_cents ?? 0;
+    if (fee > 0 && c.fee_method === "virement" && (c.fee_payee || "?") === payee) add(c.id, fee);
+  }
+  for (const r of settlements) {
+    if (r.payee === payee) add(r.concert_id, -r.amount_cents);
   }
 
-  const rank = (p: string) => {
-    const i = PAYEES.indexOf(p as (typeof PAYEES)[number]);
-    return i === -1 ? PAYEES.length : i;
-  };
-  out.debts = [...merged.values()].sort(
-    (a, b) => rank(a.payee) - rank(b.payee) || a.payee.localeCompare(b.payee)
-  );
-  return out;
+  const known = new Set(concerts.map((c) => c.id));
+  return [...byConcert.entries()]
+    .filter(([id, cents]) => cents > 0 && known.has(id))
+    .map(([concertId, amountCents]) => ({ concertId, amountCents }));
 }

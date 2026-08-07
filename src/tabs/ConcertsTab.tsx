@@ -382,6 +382,7 @@ function FeeEditor({ concert }: { concert: Concert }) {
       updateConcert(concert.id, {
         fee_cents: next,
         fee_method: concert.fee_method ?? "cash",
+        fee_at: Date.now(),
       }).catch((e) => toast.error((e as Error).message));
     }, 500);
     return () => clearTimeout(id);
@@ -397,7 +398,9 @@ function FeeEditor({ concert }: { concert: Concert }) {
       const cur = latest.current;
       const next = parseDraft(cur.draft);
       if (next === cur.cents) return;
-      updateConcert(id, { fee_cents: next, fee_method: cur.method ?? "cash" }).catch(() => {
+      updateConcert(id, {
+        fee_cents: next, fee_method: cur.method ?? "cash", fee_at: Date.now(),
+      }).catch(() => {
         /* hors ligne : Firestore rejouera l'écriture au retour du réseau */
       });
     };

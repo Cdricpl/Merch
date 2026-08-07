@@ -31,6 +31,7 @@ export async function updateConcert(
     name?: string; concert_date?: string; is_active?: boolean; is_closed?: boolean;
     notes?: string | null;
     fee_cents?: number; fee_method?: "cash" | "virement"; fee_payee?: string | null;
+    fee_at?: number;
   }
 ) {
   await updateDoc(doc(db, "concerts", id), patch);

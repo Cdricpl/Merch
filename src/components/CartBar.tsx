@@ -24,7 +24,7 @@ export function CartBar({
 }) {
   return (
     <div
-      className="fixed inset-x-0 z-20 px-3"
+      className="fixed inset-x-0 z-20 px-3 max-w-[560px] mx-auto"
       style={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }}
     >
       <div className="flex items-stretch gap-2 rounded-2xl bg-card border border-primary/40 shadow-lg shadow-black/40 overflow-hidden">
@@ -45,7 +45,7 @@ export function CartBar({
 
         <button
           onClick={onPay}
-          className="px-5 bg-primary text-primary-foreground font-display text-xl tracking-wider active:scale-[.97] transition shrink-0"
+          className="px-5 primary-action text-primary-foreground font-display text-xl tracking-wider active:scale-[.97] transition shrink-0"
         >
           Encaisser
         </button>

@@ -46,14 +46,14 @@ export const ProductCard = memo(function ProductCard({
   const handlePrimary = () => (single ? onAdd(family, variants[0]) : onOpenPicker(family));
 
   return (
-    <div className="relative bg-card border border-border/60 rounded-xl overflow-hidden flex flex-col">
+    <div className="metal-card relative rounded-2xl overflow-hidden flex flex-col">
       {/* Image area — image treated as an icon : centered, ombre portée,
           fond légèrement plus foncé pour trancher visuellement */}
       <button
         onClick={handlePrimary}
         disabled={disabled}
         className="relative w-full aspect-square flex items-center justify-center overflow-hidden disabled:opacity-40 active:opacity-70 transition
-                   bg-gradient-to-br from-muted/70 via-muted/40 to-background"
+                   bg-[radial-gradient(circle_at_50%_35%,oklch(0.28_0.012_30),transparent_62%),linear-gradient(145deg,oklch(0.18_0.008_30),oklch(0.10_0.003_30))]"
       >
         {family.image ? (
           <img
@@ -61,7 +61,7 @@ export const ProductCard = memo(function ProductCard({
             alt=""
             loading="lazy"
             decoding="async"
-            className="w-3/4 h-3/4 object-contain rounded-xl drop-shadow-[0_6px_10px_rgba(0,0,0,0.55)]"
+            className="w-[78%] h-[78%] object-contain rounded-xl drop-shadow-[0_12px_15px_rgba(0,0,0,0.72)]"
           />
         ) : (
           <div className="text-muted-foreground text-[10px] tracking-wider uppercase">
@@ -86,7 +86,7 @@ export const ProductCard = memo(function ProductCard({
           </div>
         )}
         <div className="font-semibold text-sm text-foreground truncate">{display}</div>
-        <div className="text-primary font-display text-base mt-0.5">{formatEUR(family.price_cents)}</div>
+        <div className="text-primary font-display text-xl leading-none mt-1">{formatEUR(family.price_cents)}</div>
       </div>
 
       {/* Counter row */}

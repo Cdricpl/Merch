@@ -91,6 +91,53 @@
   --ring: oklch(0.62 0.22 27);
 }
 
+/* Typographie condensée : plus de caractères lisibles par ligne à taille égale,
+   ce qui compte pour les noms d'articles et les montants vus de loin. */
+@theme inline {
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+}
+
+@layer components {
+  /* Le « plateau » de l'app : dégradé sombre et liseré, pour détacher la
+     colonne du fond sur grand écran. */
+  .app-surface {
+    min-height: 100dvh;
+    background: linear-gradient(
+      145deg,
+      oklch(0.125 0.006 30 / .94),
+      oklch(0.085 0.003 30 / .98)
+    );
+    box-shadow:
+      0 0 0 1px oklch(1 0 0 / .04),
+      0 30px 90px oklch(0 0 0 / .55);
+  }
+
+  /* Carte « métal » : reflet en haut, ombre portée, arête claire. */
+  .metal-card {
+    background: linear-gradient(
+      135deg,
+      oklch(0.18 0.008 30 / .92),
+      oklch(0.12 0.004 30 / .98)
+    );
+    border: 1px solid oklch(0.48 0.008 30 / .38);
+    box-shadow:
+      inset 0 1px 0 oklch(1 0 0 / .055),
+      0 12px 30px -20px black;
+  }
+
+  /* Rouge réservé aux actions : dégradé + halo, pour qu'il ressorte sur le noir. */
+  .primary-action {
+    background: linear-gradient(
+      135deg,
+      oklch(0.66 0.24 27),
+      oklch(0.52 0.20 27)
+    );
+    box-shadow:
+      inset 0 1px 0 oklch(1 0 0 / .20),
+      0 8px 20px -10px oklch(0.55 0.22 27 / .8);
+  }
+}
+
 @layer base {
   html {
     color-scheme: dark;
@@ -99,7 +146,12 @@
     border-color: var(--color-border);
   }
   body {
-    background-color: var(--color-background);
+    /* Deux halos très discrets, en haut à droite et à gauche, pour que le fond
+       ne soit pas un aplat mort sous l'éclairage de scène. */
+    background:
+      radial-gradient(circle at 92% 0%, oklch(0.33 0.09 27 / .14), transparent 26rem),
+      radial-gradient(circle at 3% 35%, oklch(0.28 0.02 30 / .22), transparent 22rem),
+      var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -108,7 +160,7 @@
   }
   .font-display {
     font-family: var(--font-display);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.035em;
     text-transform: uppercase;
   }
 }

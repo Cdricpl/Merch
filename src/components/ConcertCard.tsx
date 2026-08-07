@@ -18,12 +18,8 @@ export function ConcertCard({
 
   return (
     <div
-      className={`relative rounded-2xl border overflow-hidden ${
-        closed
-          ? "bg-card/60 border-border/40"
-          : active
-            ? "bg-gradient-to-br from-card via-card to-primary/5 border-primary/30"
-            : "bg-card border-border/60"
+      className={`metal-card relative rounded-2xl overflow-hidden ${
+        closed ? "opacity-70" : active ? "border-primary/40" : ""
       }`}
     >
       <div className="p-4">
@@ -71,7 +67,7 @@ export function ConcertCard({
           className={`w-full mt-3 rounded-lg py-3 flex items-center justify-center gap-2 font-display tracking-wider text-sm ${
             closed
               ? "bg-muted text-muted-foreground"
-              : "bg-primary text-primary-foreground"
+              : "primary-action text-primary-foreground"
           }`}
         >
           {closed ? "Voir le récap" : "Entrer"}

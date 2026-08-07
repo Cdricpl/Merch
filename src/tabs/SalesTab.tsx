@@ -264,7 +264,7 @@ export function SalesTab() {
         <button
           onClick={doSeed}
           disabled={seeding}
-          className="rounded-md bg-primary text-primary-foreground font-display tracking-wider px-6 py-3 disabled:opacity-50"
+          className="rounded-xl primary-action text-primary-foreground font-display tracking-wider px-6 py-3 disabled:opacity-50"
         >
           {seeding ? "…" : "Charger le stock initial"}
         </button>
@@ -286,7 +286,7 @@ export function SalesTab() {
         </p>
         <button
           onClick={() => setNewConcertOpen(true)}
-          className="rounded-md bg-primary text-primary-foreground font-display tracking-wider px-6 py-3"
+          className="rounded-xl primary-action text-primary-foreground font-display tracking-wider px-6 py-3"
         >
           Nouveau concert
         </button>
@@ -583,7 +583,7 @@ function VariantPickerModal({
         {cartCount > 0 && (
           <button
             onClick={onPay}
-            className="mt-4 w-full flex items-center justify-between gap-3 rounded-2xl bg-primary text-primary-foreground px-4 py-3.5 active:scale-[.98] transition"
+            className="mt-4 w-full flex items-center justify-between gap-3 rounded-2xl primary-action text-primary-foreground px-4 py-3.5 active:scale-[.98] transition"
           >
             <span className="text-sm font-semibold">
               Panier · {cartCount} article{cartCount > 1 ? "s" : ""}

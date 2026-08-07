@@ -55,7 +55,7 @@ export function PasscodeGate({ children }: { children: React.ReactNode }) {
         {error && <p className="text-xs text-destructive text-center">Mot de passe incorrect</p>}
         <button
           type="submit"
-          className="w-full rounded-md bg-primary text-primary-foreground font-display tracking-wider py-3"
+          className="w-full rounded-xl primary-action text-primary-foreground font-display tracking-wider py-3"
         >
           Entrer
         </button>

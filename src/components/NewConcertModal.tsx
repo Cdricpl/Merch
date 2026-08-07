@@ -54,7 +54,7 @@ export function NewConcertModal({
         <button
           onClick={create}
           disabled={busy || !name.trim()}
-          className="w-full rounded-md bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
+          className="w-full rounded-md primary-action text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
         >
           {busy ? "Création…" : "Créer"}
         </button>

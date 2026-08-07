@@ -20,7 +20,7 @@ export function CaisseCard({
 }) {
   const closed = concert.is_closed === true;
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-border/60 bg-gradient-to-br from-card via-card to-background">
+    <div className="metal-card relative rounded-2xl overflow-hidden">
       {/* Decorative glow */}
       <div className="pointer-events-none absolute -top-16 -right-16 w-56 h-56 rounded-full bg-primary/15 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-16 -left-10 w-40 h-40 rounded-full bg-amber-500/10 blur-3xl" />
@@ -53,7 +53,9 @@ export function CaisseCard({
       {/* Big number */}
       <div className="relative px-4 pb-3">
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Caisse</div>
-        <div className="font-display text-5xl text-primary leading-none mt-1">{formatEUR(totalCents)}</div>
+        <div className="font-display text-6xl text-primary leading-none mt-1 drop-shadow-[0_3px_12px_rgba(220,20,30,.22)]">
+          {formatEUR(totalCents)}
+        </div>
 
         {/* Ce qui doit être en espèces dans la boîte, et ce qui est parti en QR. */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs">

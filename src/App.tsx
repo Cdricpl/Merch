@@ -85,12 +85,16 @@ function Shell() {
   const { degraded } = useStore();
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-background">
-      <header className="px-4 pt-4 pb-2 flex items-center justify-between shrink-0">
+    <div className="min-h-[100dvh] bg-background sm:px-4">
+      {/* Hauteur DÉFINIE, pas seulement minimale : sans ça, la colonne grandit
+          avec son contenu, `main` ne scrolle jamais tout seul, c'est le document
+          entier qui défile — et la barre d'onglets part hors de l'écran. */}
+      <div className="app-surface h-[100dvh] max-w-[560px] mx-auto flex flex-col relative overflow-hidden sm:border-x sm:border-border/50">
+      <header className="px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-3 flex items-center justify-between shrink-0 border-b border-border/35">
         <img
           src={LOGO_URL}
           alt="Ardenne Heavy"
-          className="h-9 w-auto object-contain"
+          className="h-11 w-auto object-contain drop-shadow-[0_3px_10px_rgba(0,0,0,.7)]"
         />
         <div className="flex items-center gap-2">
           {/* Dire que la connexion se rétablit vaut mieux que laisser croire que
@@ -119,7 +123,7 @@ function Shell() {
       </main>
 
       <nav
-        className="fixed bottom-0 inset-x-0 bg-card/95 backdrop-blur border-t border-border z-10"
+        className="sticky bottom-0 mt-auto bg-background/95 backdrop-blur-xl border-t border-border/60 z-10"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="flex relative">
@@ -128,6 +132,7 @@ function Shell() {
           <TabBtn active={tab === "stock"} onClick={() => setTab("stock")} icon={<Boxes className="h-5 w-5" />} label="Stock" />
         </div>
       </nav>
+      </div>
     </div>
   );
 }

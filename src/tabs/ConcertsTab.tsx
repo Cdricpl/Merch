@@ -47,7 +47,7 @@ export function ConcertsTab() {
         <button
           onClick={() => setNewOpen(true)}
           aria-label="Nouveau concert"
-          className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center active:scale-90 transition shadow-lg shadow-primary/30"
+          className="w-11 h-11 rounded-full primary-action text-primary-foreground flex items-center justify-center active:scale-90 transition"
         >
           <Plus className="h-5 w-5" />
         </button>
@@ -323,7 +323,7 @@ function ConcertDetail({
       <div className="flex gap-2">
         <button
           onClick={save}
-          className="flex-1 rounded-xl bg-primary text-primary-foreground font-display tracking-wider py-3"
+          className="flex-1 rounded-xl primary-action text-primary-foreground font-display tracking-wider py-3"
         >
           Enregistrer
         </button>

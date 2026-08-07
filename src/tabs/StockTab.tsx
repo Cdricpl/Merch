@@ -82,7 +82,7 @@ export function StockTab() {
         <button
           onClick={() => setAddOpen(true)}
           aria-label="Nouveau produit"
-          className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center active:scale-90 transition shadow-lg shadow-primary/30"
+          className="w-11 h-11 rounded-full primary-action text-primary-foreground flex items-center justify-center active:scale-90 transition"
         >
           <Plus className="h-5 w-5" />
         </button>
@@ -95,7 +95,7 @@ export function StockTab() {
             <button
               key={family.id}
               onClick={() => setOpenId(family.id)}
-              className="w-full flex items-center gap-3 bg-card border border-border/60 rounded-xl p-3 text-left active:bg-card/70 transition"
+              className="metal-card w-full flex items-center gap-3 rounded-2xl p-3 text-left active:opacity-80 transition"
             >
               <div className="w-12 h-12 rounded-md bg-muted overflow-hidden shrink-0">
                 {family.image && <img src={family.image} alt="" className="w-full h-full object-cover" />}
@@ -336,7 +336,7 @@ function FamilyDetail({
                     {g.items.reduce((s, v) => s + v.stock, 0)} en stock
                   </div>
                 </div>
-                <div className="bg-card border border-border/60 rounded-xl divide-y divide-border/40">
+                <div className="metal-card rounded-2xl divide-y divide-border/40">
                   {g.items.map((v) => (
                     <div key={v.id} className="flex items-center gap-2 px-2 py-1">
                       <div className="flex-1">
@@ -492,7 +492,7 @@ function ReplenishModal({
         <button
           onClick={submit}
           disabled={busy}
-          className="w-full rounded-xl bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
+          className="w-full rounded-xl primary-action text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
         >
           {busy ? "…" : `Ajouter ${n} au stock`}
         </button>
@@ -544,7 +544,7 @@ function AddFamilyModal({ onClose }: { onClose: () => void }) {
         <button
           onClick={create}
           disabled={busy || !name.trim()}
-          className="w-full rounded-xl bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
+          className="w-full rounded-xl primary-action text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
         >
           {busy ? "…" : "Créer"}
         </button>
@@ -640,7 +640,7 @@ function AddVariantModal({
         <button
           onClick={create}
           disabled={busy}
-          className="w-full rounded-xl bg-primary text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
+          className="w-full rounded-xl primary-action text-primary-foreground font-display tracking-wider py-3 disabled:opacity-50"
         >
           {busy ? "…" : "Ajouter"}
         </button>

@@ -28,14 +28,20 @@ export function ProductCard({
 
   return (
     <div className="relative bg-card border border-border/60 rounded-xl overflow-hidden flex flex-col">
-      {/* Image area with stock badge */}
+      {/* Image area — image treated as an icon : centered, ombre portée,
+          fond légèrement plus foncé pour trancher visuellement */}
       <button
         onClick={single ? onAdd : onOpenPicker}
         disabled={disabled}
-        className="relative w-full aspect-square bg-muted/40 flex items-center justify-center overflow-hidden disabled:opacity-40 active:opacity-70 transition"
+        className="relative w-full aspect-square flex items-center justify-center overflow-hidden disabled:opacity-40 active:opacity-70 transition
+                   bg-gradient-to-br from-muted/70 via-muted/40 to-background"
       >
         {family.image ? (
-          <img src={family.image} alt="" className="w-full h-full object-cover" />
+          <img
+            src={family.image}
+            alt=""
+            className="w-3/4 h-3/4 object-contain rounded-xl drop-shadow-[0_6px_10px_rgba(0,0,0,0.55)]"
+          />
         ) : (
           <div className="text-muted-foreground text-[10px] tracking-wider uppercase">
             {category || "produit"}

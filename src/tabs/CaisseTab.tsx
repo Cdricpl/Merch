@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { toast } from "sonner";
-import { ArrowDownLeft, Check, QrCode } from "lucide-react";
+import { ArrowDownLeft, Check, QrCode, Undo2 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import { payeeDebts, settlementPlan, totalOwed } from "../lib/caisse";
@@ -21,7 +21,12 @@ export function CaisseTab() {
     [concerts, sales, settlements]
   );
   const owing = debts.filter((d) => d.remaining > 0);
-  const total = totalOwed(debts);
+  // Un solde négatif veut dire qu'on a enregistré plus de remises que le membre
+  // n'a encaissé — typiquement un cachet basculé de « Virement » à « Liquide »
+  // après coup. Le masquer laissait un total que rien à l'écran n'expliquait :
+  // il apparaît donc à part, avec de quoi le corriger.
+  const overpaid = debts.filter((d) => d.remaining < 0);
+  const total = totalOwed(owing);
 
   const settle = async (payee: string) => {
     const plan = settlementPlan(concerts, sales, settlements, payee);
@@ -50,6 +55,18 @@ export function CaisseTab() {
     } catch (e) { toast.error((e as Error).message); }
   };
 
+  /** Défait le dernier geste de remise d'un membre — toutes ses lignes. */
+  const undoLast = async (payee: string) => {
+    const mine = settlements.filter((r) => r.payee === payee);
+    if (mine.length === 0) return;
+    const latest = Math.max(...mine.map((r) => r.created_at));
+    const ids = mine.filter((r) => r.created_at === latest).map((r) => r.id);
+    try {
+      await deleteSettlements(ids);
+      toast.success("Remise annulée");
+    } catch (e) { toast.error((e as Error).message); }
+  };
+
   if (loading) {
     return <div className="px-6 py-12 text-center text-muted-foreground">Chargement…</div>;
   }
@@ -58,7 +75,7 @@ export function CaisseTab() {
     <div className="px-4 pt-1 pb-4 space-y-4">
       <h1 className="font-display text-[22px]">À rembourser</h1>
 
-      {owing.length === 0 ? (
+      {owing.length === 0 && overpaid.length === 0 ? (
         <div className="px-2 py-12 text-center space-y-3">
           <div className="w-12 h-12 rounded-full bg-ok/15 text-ok flex items-center justify-center mx-auto">
             <Check className="h-6 w-6" />
@@ -103,6 +120,39 @@ export function CaisseTab() {
             ))}
           </div>
         </>
+      )}
+
+      {overpaid.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Remis en trop
+          </div>
+          <div className="card-surface rounded-2xl divide-y divide-border">
+            {overpaid.map((d) => (
+              <div key={d.payee} className="flex items-center gap-3 px-3 py-2.5">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-destructive/20 text-destructive">
+                  <Undo2 className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm truncate">{d.payee}</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    encaissé {formatEUR(d.collected)} · remis {formatEUR(d.settled)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => undoLast(d.payee)}
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-border text-[12px] font-semibold px-3 py-2 active:bg-muted/40 transition"
+                >
+                  Annuler {formatEUR(-d.remaining)}
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground px-1">
+            Plus de remises enregistrées que d'encaissements. Annule la dernière
+            pour remettre le compte d'aplomb.
+          </p>
+        </div>
       )}
     </div>
   );

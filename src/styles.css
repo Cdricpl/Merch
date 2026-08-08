@@ -3,30 +3,24 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Seuls les jetons dont une classe se sert vraiment. Ceux que plus rien
+   n'appelait (popover, secondary, accent, ring, radius-sm) partaient malgré
+   tout dans le CSS livré. */
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
-  --color-ring: var(--ring);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
@@ -44,29 +38,18 @@
   /* Surface des cartes : à peine plus claire que le fond, la séparation vient
      surtout de la bordure. */
   --card: #141416;
-  --card-foreground: #ffffff;
-
-  --popover: #161619;
-  --popover-foreground: #ffffff;
 
   --primary: #e11b22;
   --primary-foreground: #ffffff;
 
-  --secondary: #1c1c1f;
-  --secondary-foreground: #ffffff;
-
   --muted: #1c1c1f;
   --muted-foreground: #8a8a91;
-
-  --accent: #e8912a;
-  --accent-foreground: #ffffff;
 
   --destructive: #e5484d;
   --destructive-foreground: #ffffff;
 
   --border: #262629;
   --input: #1c1c1f;
-  --ring: #e11b22;
 
   /* Jauges de stock */
   --ok: #3fb950;
@@ -170,11 +153,4 @@
     height: 100%;
     border-radius: 999px;
   }
-}
-
-.line-clamp-2 {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }

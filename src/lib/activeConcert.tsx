@@ -7,15 +7,14 @@ const LS_KEY = "merch:activeConcert";
 
 type Ctx = {
   concert: Concert | null;
-  concertId: string | null;
   pick: (id: string) => void;
 };
 
 const C = createContext<Ctx | null>(null);
 
 /**
- * Le concert en cours est remonté ici parce que l'en-tête l'affiche en
- * permanence, alors que le choix se fait depuis l'onglet Ventes.
+ * Le concert en cours est remonté ici parce qu'il survit au changement
+ * d'onglet et au rechargement, alors que le choix se fait depuis Ventes.
  */
 export function ActiveConcertProvider({ children }: { children: React.ReactNode }) {
   const { concerts } = useStore();
@@ -39,10 +38,7 @@ export function ActiveConcertProvider({ children }: { children: React.ReactNode 
     return open.find((c) => c.is_active) ?? open[0] ?? null;
   }, [concerts, id]);
 
-  const value = useMemo(
-    () => ({ concert, concertId: concert?.id ?? null, pick }),
-    [concert, pick]
-  );
+  const value = useMemo(() => ({ concert, pick }), [concert, pick]);
 
   return <C.Provider value={value}>{children}</C.Provider>;
 }

@@ -64,6 +64,11 @@ export const totalOwed = (debts: PayeeDebt[]) => debts.reduce((n, d) => n + d.re
  * Le bouton « Remis » règle son total d'un geste, mais la remise s'inscrit
  * concert par concert : c'est ce qui garde le détail de chaque soirée juste.
  * Les concerts disparus sont écartés — on ne peut plus rien y inscrire.
+ *
+ * Le plan ne dépasse JAMAIS ce que le membre doit en tout. Une soirée où il a
+ * rendu plus qu'il n'avait encaissé vient en déduction des autres : sans ce
+ * plafond, un bouton « Remis 50 € » pouvait inscrire les 100 € d'une autre
+ * soirée et creuser le trou au lieu de le combler.
  */
 export function settlementPlan(
   concerts: Concert[],
@@ -87,8 +92,18 @@ export function settlementPlan(
     if (r.payee === payee) add(r.concert_id, -r.amount_cents);
   }
 
+  let reste = 0;
+  for (const cents of byConcert.values()) reste += cents;
+  if (reste <= 0) return [];
+
   const known = new Set(concerts.map((c) => c.id));
-  return [...byConcert.entries()]
-    .filter(([id, cents]) => cents > 0 && known.has(id))
-    .map(([concertId, amountCents]) => ({ concertId, amountCents }));
+  const plan: Array<{ concertId: string; amountCents: number }> = [];
+  for (const [concertId, cents] of byConcert) {
+    if (cents <= 0 || !known.has(concertId)) continue;
+    const amountCents = Math.min(cents, reste);
+    plan.push({ concertId, amountCents });
+    reste -= amountCents;
+    if (reste === 0) break;
+  }
+  return plan;
 }

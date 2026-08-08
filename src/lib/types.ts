@@ -33,9 +33,9 @@ export type Concert = {
   fee_method?: "cash" | "virement";
   fee_payee?: string | null; // le membre crédité, pour un virement
   /**
-   * Quand le montant a été saisi. Sert à situer le cachet par rapport au
-   * dernier comptage de la caisse. Absent sur les cachets d'avant ce suivi :
-   * on retombe alors sur la date du concert.
+   * Quand le montant a été saisi. Sert à dater la ligne « Cachet » de l'export,
+   * pour qu'elle se range à sa place parmi les ventes. Absent sur les cachets
+   * d'avant ce suivi : on retombe alors sur la date du concert.
    */
   fee_at?: number;
 };

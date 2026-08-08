@@ -11,8 +11,9 @@ import { PasscodeGate } from "./components/PasscodeGate";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { LOGO_URL } from "./lib/assets";
 
-// Ce qui sert au stand, et rien de plus. « Caisse » porte le total général :
-// il traverse les concerts, donc il ne pouvait pas vivre sur une fiche.
+// Ce qui sert au stand, et rien de plus. « Caisse » ne porte plus de solde :
+// il ne reste que les remboursements, qui traversent les concerts et ne
+// pouvaient donc pas vivre sur une fiche.
 type Tab = "sales" | "concerts" | "stock" | "caisse";
 
 async function hardRefresh() {

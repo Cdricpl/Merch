@@ -4,9 +4,10 @@ import { formatEUR } from "../lib/format";
 import { CAISSE_IMG } from "../lib/assets";
 import type { Concert } from "../lib/types";
 
-// Le mot « caisse » est réservé à la boîte et à son onglet. Ici c'est la
-// RECETTE du concert en cours : ce que le merch a rapporté ce soir, quel que
-// soit le moyen de paiement — dont une partie n'est pas dans la boîte.
+// Malgré son nom de fichier, cette carte n'affiche pas un solde de caisse :
+// c'est la RECETTE du concert en cours, ce que le merch a rapporté ce soir,
+// quel que soit le moyen de paiement — dont une partie n'est pas dans la
+// boîte. Le solde de la caisse, lui, ne vit plus dans l'app.
 
 /** Sépare « 245,00 € » en « 245 » et « ,00 € » : l'unité reste dominante. */
 function splitAmount(cents: number): [string, string] {

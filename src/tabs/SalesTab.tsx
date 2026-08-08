@@ -60,13 +60,13 @@ export function SalesTab() {
   const totalItems = salesThisConcert.reduce((s, x) => s + x.quantity, 0);
 
   // Ce qui est rentré en liquide et ce qui est passé par QR : c'est la première
-  // chose qu'on vérifie en fin de concert, avant même de compter la caisse.
+  // chose qu'on vérifie en fin de concert, la boîte à la main.
   //
   // Les ventes enregistrées avant le suivi des paiements n'ont pas de méthode.
-  // Elles vont dans un troisième bac plutôt que d'être versées d'office au cash :
-  // sinon la ligne « Cash » d'ici et le tableau « Qui a encaissé » de l'onglet
-  // Concerts annonceraient deux montants différents pour le même concert. Ainsi
-  // les trois bacs retombent toujours exactement sur le total de la caisse.
+  // Elles vont dans un troisième bac plutôt que d'être versées d'office au
+  // cash : sinon la ligne « Cash » annoncerait plus que ce qu'il y a vraiment
+  // dans la boîte. Ainsi les trois bacs retombent toujours exactement sur la
+  // recette du concert.
   const paymentSplit = useMemo(() => {
     let cashCents = 0;
     let qrCents = 0;

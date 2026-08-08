@@ -23,12 +23,37 @@ const Ctx = createContext<Store | null>(null);
 // et jamais les images.
 const LS_PREFIX = "merch:v4:";
 
+// Les collections réellement écoutées. Sert aussi à faire le ménage : les
+// versions précédentes cachaient « expenses », « caisseChecks » et
+// « openingBalances », supprimés depuis. Personne ne les relit, mais ils
+// dorment encore sur chaque téléphone et mangent le quota — celui-là même qui
+// fait échouer en silence l'écriture du cache utile.
+const CACHED = ["families", "variants", "concerts", "sales", "settlements"] as const;
+
+function purgeStaleCaches() {
+  try {
+    const keep = new Set(CACHED.map((n) => LS_PREFIX + n));
+    const doomed: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(LS_PREFIX) && !keep.has(k)) doomed.push(k);
+    }
+    for (const k of doomed) localStorage.removeItem(k);
+  } catch {
+    /* mode privé : rien à nettoyer */
+  }
+}
+
 // Au-delà de cette durée en arrière-plan, on considère la connexion temps réel
 // comme perdue et on la reconstruit au retour au premier plan.
 const STALE_AFTER_MS = 60_000;
 
-// Nombre d'écoutes temps réel : sert de repère pour savoir quand tout est arrivé.
-const SUBSCRIPTIONS = 5;
+// Nombre d'écoutes temps réel : sert de repère pour savoir quand tout est
+// arrivé. Une valeur trop basse retire l'écran de chargement trop tôt, une
+// valeur trop haute ne l'enlève jamais — d'où le comptage sur CACHED.
+const SUBSCRIPTIONS = CACHED.length;
+
+purgeStaleCaches();
 
 function readCache<T>(name: string): T[] {
   try {
@@ -85,7 +110,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Une erreur d'écoute suffit à relancer tout le bloc : inutile de le faire
-    // quatre fois si les quatre collections tombent ensemble.
+    // cinq fois si les cinq collections tombent ensemble.
     let restarting = false;
     let retryId: ReturnType<typeof setTimeout> | undefined;
     const unsubs: Array<() => void> = [];

@@ -53,7 +53,7 @@ export function salesWorkbook(
   sales: Sale[],
   families: Family[],
   variants: Variant[],
-  settlements: Settlement[] = [],
+  settlements: Settlement[],
 ): Blob {
   const variantById = new Map(variants.map((v) => [v.id, v]));
   const familyById = new Map(families.map((f) => [f.id, f]));

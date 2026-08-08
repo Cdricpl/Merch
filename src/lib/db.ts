@@ -40,7 +40,7 @@ export async function updateConcert(
 export async function deleteConcert(
   id: string,
   saleIds: string[],
-  settlementIds: string[] = [],
+  settlementIds: string[],
 ) {
   const batch = writeBatch(db);
   for (const sid of saleIds) batch.delete(doc(db, "sales", sid));
@@ -52,7 +52,6 @@ export async function deleteConcert(
 }
 
 // -------- Remises --------
-
 
 /**
  * Un membre remet dans la boîte ce qu'il avait encaissé.

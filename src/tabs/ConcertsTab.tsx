@@ -153,7 +153,6 @@ function ConcertDetail({
   // plutôt que de le laisser s'évaporer.
   const orphanCents = total - grouped.reduce((s, r) => s + r.total, 0);
 
-
   const save = async () => {
     try {
       await updateConcert(concert.id, { name, concert_date: date, notes: notes || null, is_active: active });
@@ -188,7 +187,6 @@ function ConcertDetail({
       onDeleted();
     } catch (e) { toast.error((e as Error).message); }
   };
-
 
   return (
     <div className="px-4 pt-1 pb-6 space-y-4">

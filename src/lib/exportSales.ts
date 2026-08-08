@@ -146,13 +146,25 @@ export function salesWorkbook(
   return buildXlsx({ name: "Ventes", widths: WIDTHS, intCols: INT_COLS, rows });
 }
 
-/** « Fête du Rock ! » → « ventes-fete-du-rock-2026-08-05.xlsx » */
+/**
+ * « Durbuy Rock » + « 2026-08-19 » → « Durbuy Rock 2026-08-19.xlsx »
+ *
+ * Le nom du concert est gardé tel quel, accents et majuscules compris : c'est
+ * lui qu'on cherche des yeux dans un dossier. Seuls les caractères qu'un
+ * système de fichiers refuse sont retirés.
+ *
+ * La date reste au format ISO malgré son air technique : c'est le seul qui
+ * range les fichiers dans l'ordre chronologique quand on trie un dossier par
+ * nom.
+ */
 export function salesFileName(concertName: string, concertDate: string): string {
-  const slug = concertName
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
-    || "concert";
-  return `ventes-${slug}-${concertDate}.xlsx`;
+  const nom = concertName
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60)
+    || "Concert";
+  return `${nom} ${concertDate}.xlsx`;
 }
 
 /**

@@ -92,8 +92,17 @@ export type OpeningBalance = {
   id: string;
   cents: number;
   created_at: number;
-  /** Champ des versions antérieures, relu pour ne pas perdre une saisie. */
+  /**
+   * Champs des versions antérieures, relus pour ne pas perdre une saisie.
+   *
+   * Ces versions enregistraient un COMPTAGE : le montant trouvé dans la boîte
+   * (counted_cents) et l'écart avec ce que l'app calculait alors
+   * (adjust_cents = compté − mouvements). Cet écart est précisément ce que la
+   * boîte contenait avant les mouvements, donc le solde de départ d'aujourd'hui.
+   * Reprendre counted_cents à sa place compterait les mouvements deux fois.
+   */
   counted_cents?: number;
+  adjust_cents?: number;
 };
 
 export type Sale = {

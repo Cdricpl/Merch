@@ -119,10 +119,19 @@ export function boxMovements(
   return out.sort((a, b) => a.at - b.at);
 }
 
-/** Le montant retenu, en relisant aussi le champ des versions antérieures. */
+/**
+ * Le solde de départ retenu, y compris pour une saisie d'une version antérieure.
+ *
+ * Ces versions enregistraient un comptage, pas un solde de départ. La
+ * conversion n'est pas le montant compté mais l'écart : compté moins les
+ * mouvements connus à cet instant, c'est-à-dire ce que la boîte contenait
+ * avant eux. Prendre le montant compté ferait compter ces mouvements deux fois.
+ */
 export function openingCents(opening: OpeningBalance | null): number {
   if (!opening) return 0;
-  return opening.cents ?? opening.counted_cents ?? 0;
+  if (typeof opening.cents === "number") return opening.cents;
+  if (typeof opening.adjust_cents === "number") return opening.adjust_cents;
+  return opening.counted_cents ?? 0;
 }
 
 /** Ce que la boîte devrait contenir : le départ, plus tout ce qui a bougé. */

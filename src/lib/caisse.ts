@@ -9,21 +9,26 @@
 //     la boîte que le jour où il les rend (une « remise ») ;
 //   · une dépense en SORT.
 //
-// ── Pourquoi un journal daté, et pas une somme ───────────────────────────
-// La première version additionnait tout et ajoutait un « report » figé au
-// moment du comptage. Elle comptait donc DEUX FOIS tout ce qu'on saisissait
-// après coup à propos du passé : compter 1684 € puis inscrire le cachet d'un
-// concert déjà encaissé faisait afficher 2084 € alors que la boîte n'avait pas
-// bougé.
+// ── Recalcul complet ─────────────────────────────────────────────────────
+//   solde = solde de départ + TOUS les mouvements connus
 //
-// Un comptage est désormais un POINT DE DÉPART daté : il dit ce que la boîte
-// contenait à cet instant, et seuls les mouvements POSTÉRIEURS s'y ajoutent.
-// Inscrire après coup une dépense d'il y a trois mois ne change donc plus le
-// solde — cet argent était déjà sorti quand on a compté. Et rien n'oblige à
-// deviner ce qui était compris dans le comptage : la date suffit.
+// Le solde de départ est ce que la boîte contenait avant tout ce que l'app
+// enregistre. Rien n'est figé : corriger une vente d'il y a trois mois ou
+// inscrire une dépense oubliée remet aussitôt le compte juste.
+//
+// Contrepartie assumée, et c'est la seule : il faut que TOUT soit saisi. Une
+// dépense jamais inscrite fausse le solde en permanence — mais elle le corrige
+// dès qu'on l'inscrit, si tard soit-il.
+//
+// Une version précédente figeait au contraire un « report » au moment d'un
+// comptage. Elle comptait alors deux fois tout ce qu'on saisissait ensuite à
+// propos du passé. C'est écarté.
 
 import { PAYEES } from "./payment";
-import { saleTotalCents, type CaisseCheck, type Concert, type Expense, type Sale, type Settlement } from "./types";
+import {
+  saleTotalCents,
+  type Concert, type Expense, type OpeningBalance, type Sale, type Settlement,
+} from "./types";
 
 export type MovementKind = "sale" | "fee" | "settlement" | "expense";
 
@@ -114,30 +119,16 @@ export function boxMovements(
   return out.sort((a, b) => a.at - b.at);
 }
 
-export type BoxBalance = {
-  /** Ce que la boîte devrait contenir. */
-  balance: number;
-  /** Le comptage qui sert de point de départ, s'il y en a un. */
-  anchor: CaisseCheck | null;
-  /** Les mouvements postérieurs au comptage : ceux qui expliquent le solde. */
-  since: Movement[];
-};
-
-/**
- * Le solde de la boîte.
- *
- * Sans comptage, c'est la somme de tous les mouvements connus — forcément
- * incomplète tant que personne n'a dit ce qu'il y avait au départ.
- */
-export function boxBalance(movements: Movement[], lastCount: CaisseCheck | null): BoxBalance {
-  if (!lastCount) {
-    return { balance: sum(movements), anchor: null, since: movements };
-  }
-  const since = movements.filter((m) => m.at > lastCount.created_at);
-  return { balance: lastCount.counted_cents + sum(since), anchor: lastCount, since };
+/** Le montant retenu, en relisant aussi le champ des versions antérieures. */
+export function openingCents(opening: OpeningBalance | null): number {
+  if (!opening) return 0;
+  return opening.cents ?? opening.counted_cents ?? 0;
 }
 
-const sum = (ms: Movement[]) => ms.reduce((n, m) => n + m.cents, 0);
+/** Ce que la boîte devrait contenir : le départ, plus tout ce qui a bougé. */
+export function boxBalance(movements: Movement[], opening: OpeningBalance | null): number {
+  return openingCents(opening) + movements.reduce((n, m) => n + m.cents, 0);
+}
 
 /**
  * Regroupe les mouvements pour l'affichage : une ligne par concert pour les

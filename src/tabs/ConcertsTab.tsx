@@ -144,6 +144,11 @@ function ConcertDetail({
   const totalItems = mySales.reduce((s, x) => s + x.quantity, 0);
   const totalDiscount = mySales.reduce((s, x) => s + (x.discount_cents ?? 0), 0);
 
+  // Ce que la soirée a rapporté EN TOUT : le merch et le cachet, quel que soit
+  // son mode de paiement. Le mot « totale » ne peut pas exclure le cachet.
+  const fee = concert.fee_cents ?? 0;
+  const recette = total + fee;
+
   // Supprimer une taille ne supprime pas ses ventes : celles-ci ne retombent
   // alors sur aucune ligne du détail, et l'argent vendu disparaissait de
   // l'écran tout en restant dans le total. On le remonte sur une ligne à part
@@ -206,8 +211,12 @@ function ConcertDetail({
       <div className="card-surface rounded-2xl p-4">
         <div>
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Recette totale</div>
-          <div className="font-display text-[2.5rem] text-primary leading-none mt-1.5">{formatEUR(total)}</div>
+          <div className="font-display text-[2.5rem] text-primary leading-none mt-1.5">{formatEUR(recette)}</div>
           <div className="text-xs text-muted-foreground mt-2">
+            {formatEUR(total)} de merch
+            {fee > 0 && <> · {formatEUR(fee)} de cachet</>}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
             {totalItems} article{totalItems > 1 ? "s" : ""} vendu{totalItems > 1 ? "s" : ""}
             {totalDiscount > 0 && (
               <> · <span className="text-emerald-500">{formatEUR(totalDiscount)} de remises</span></>

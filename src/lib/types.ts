@@ -76,25 +76,24 @@ export type Settlement = {
 };
 
 /**
- * Un comptage réel de la boîte.
+ * Le solde de départ de la boîte.
  *
- * Tout ce que l'app additionne part des concerts qu'elle connaît — or la boîte
- * contenait déjà de l'argent avant, et un billet peut toujours s'égarer. On
- * enregistre donc l'écart entre ce qui a été compté et ce qui était attendu :
- * le total repart de la réalité, et les mouvements suivants s'y ajoutent.
+ * Ce qu'elle contenait AVANT tout ce que l'app enregistre. Le solde courant
+ * s'obtient en lui ajoutant tous les mouvements connus, sans exception : c'est
+ * un recalcul complet, pas un report figé.
  *
- * Chaque comptage est conservé : c'est un historique, et seul le plus récent
- * s'applique.
+ * Contrepartie assumée : il faut que tout soit saisi. Une dépense oubliée fausse
+ * le total tant qu'elle n'est pas inscrite — mais l'inscrire, même des mois
+ * plus tard, remet le compte juste.
+ *
+ * Seul le plus récent s'applique ; les précédents restent comme historique.
  */
-export type CaisseCheck = {
+export type OpeningBalance = {
   id: string;
-  /** Ce qui a été compté dans la boîte. */
-  counted_cents: number;
-  /** Ce que l'app attendait à cet instant. */
-  computed_cents: number;
-  /** counted − computed. Positif : il y avait plus que prévu. */
-  adjust_cents: number;
+  cents: number;
   created_at: number;
+  /** Champ des versions antérieures, relu pour ne pas perdre une saisie. */
+  counted_cents?: number;
 };
 
 export type Sale = {

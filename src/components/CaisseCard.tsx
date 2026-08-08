@@ -4,6 +4,10 @@ import { formatEUR } from "../lib/format";
 import { CAISSE_IMG } from "../lib/assets";
 import type { Concert } from "../lib/types";
 
+// Le mot « caisse » est réservé à la boîte et à son onglet. Ici c'est la
+// RECETTE du concert en cours : ce que le merch a rapporté ce soir, quel que
+// soit le moyen de paiement — dont une partie n'est pas dans la boîte.
+
 /** Sépare « 245,00 € » en « 245 » et « ,00 € » : l'unité reste dominante. */
 function splitAmount(cents: number): [string, string] {
   const s = formatEUR(cents);
@@ -85,7 +89,7 @@ export function CaisseCard({
       </div>
 
       <div className="relative px-4 pt-2.5 pb-2.5 w-[52%] [text-shadow:0_2px_12px_rgb(0_0_0_/_0.95)]">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Caisse</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Recette</div>
         <div className="mt-1 flex items-baseline text-primary font-display leading-none">
           <span className="text-[2.6rem]">{whole}</span>
           <span className="text-xl">{decimals}</span>

@@ -7,16 +7,17 @@ import {
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import {
-  boxBalance, boxMovements, payeeDebts, settlementPlan, summariseMovements,
-  totalOwed, unknownSalesCents, type Movement, type PayeeDebt,
+  boxBalance, boxMovements, openingCents, payeeDebts, settlementPlan,
+  summariseMovements, totalOwed, unknownSalesCents,
+  type Movement, type PayeeDebt,
 } from "../lib/caisse";
 import {
   createExpense, createSettlements, deleteExpense, deleteSettlements,
-  recordCaisseCheck,
+  setOpeningBalance,
 } from "../lib/db";
 import { useBackHandler } from "../lib/useBackHandler";
 import { CaisseBox } from "../components/CaisseBox";
-import type { Concert, Expense } from "../lib/types";
+import type { Concert, Expense, OpeningBalance } from "../lib/types";
 
 const dateFR = (ms: number) =>
   new Date(ms).toLocaleDateString("fr-BE", { day: "2-digit", month: "long", year: "numeric" });
@@ -28,20 +29,16 @@ const dateFR = (ms: number) =>
  * ce chiffre, et qui doit encore quelque chose.
  */
 export function CaisseTab() {
-  const { concerts, sales, expenses, settlements, caisseChecks, loading } = useStore();
-  const [countOpen, setCountOpen] = useState(false);
+  const { concerts, sales, expenses, settlements, openingBalances, loading } = useStore();
+  const [openingOpen, setOpeningOpen] = useState(false);
 
   const movements = useMemo(
     () => boxMovements(concerts, sales, expenses, settlements),
     [concerts, sales, expenses, settlements]
   );
-  // Les comptages arrivent du plus récent au plus ancien ; seul le dernier sert
-  // de point de départ.
-  const lastCount = caisseChecks[0] ?? null;
-  const { balance, anchor, since } = useMemo(
-    () => boxBalance(movements, lastCount),
-    [movements, lastCount]
-  );
+  // Les saisies arrivent du plus récent au plus ancien ; seule la dernière vaut.
+  const opening = openingBalances[0] ?? null;
+  const balance = useMemo(() => boxBalance(movements, opening), [movements, opening]);
 
   const debts = useMemo(
     () => payeeDebts(concerts, sales, settlements),
@@ -61,13 +58,14 @@ export function CaisseTab() {
       <CaisseBox balance={balance} owed={owed} unknownSales={unknown} />
 
       <button
-        onClick={() => setCountOpen(true)}
+        onClick={() => setOpeningOpen(true)}
         className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm active:bg-muted/40 transition"
       >
-        <ClipboardCheck className="h-4 w-4" /> J'ai compté la caisse
+        <ClipboardCheck className="h-4 w-4" />
+        {opening ? "Modifier le solde de départ" : "Définir le solde de départ"}
       </button>
 
-      <Journal anchor={anchor} since={since} balance={balance} />
+      <Journal opening={opening} movements={movements} balance={balance} />
 
       <MemberDebts
         debts={debts}
@@ -78,9 +76,13 @@ export function CaisseTab() {
 
       <ExpenseList expenses={expenses} concerts={concerts} />
 
-      {countOpen &&
+      {openingOpen &&
         createPortal(
-          <CountSheet balance={balance} onClose={() => setCountOpen(false)} />,
+          <OpeningSheet
+            current={openingCents(opening)}
+            movementsTotal={balance - openingCents(opening)}
+            onClose={() => setOpeningOpen(false)}
+          />,
           document.body
         )}
     </div>
@@ -90,38 +92,31 @@ export function CaisseTab() {
 /**
  * D'où vient le solde.
  *
- * Le comptage sert de point de départ, et tout ce qui a bougé depuis s'y
- * ajoute, ligne par ligne. C'est la seule façon de pouvoir vérifier le chiffre
- * plutôt que de le croire sur parole.
+ * Le solde de départ en pied, tous les mouvements connus au-dessus, du plus
+ * récent au plus ancien. Le chiffre se vérifie ligne à ligne au lieu de devoir
+ * être cru sur parole.
  */
-function Journal({ anchor, since, balance }: {
-  anchor: { counted_cents: number; created_at: number } | null;
-  since: Movement[];
+function Journal({ opening, movements, balance }: {
+  opening: OpeningBalance | null;
+  movements: Movement[];
   balance: number;
 }) {
-  const lignes = useMemo(() => summariseMovements(since), [since]);
-
-  if (!anchor && lignes.length === 0) return null;
+  const lignes = useMemo(() => summariseMovements(movements), [movements]);
+  if (!opening && lignes.length === 0) return null;
 
   return (
     <div className="space-y-2">
       <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-        {anchor ? "Depuis le dernier comptage" : "Mouvements"}
+        Journal de la caisse
       </div>
 
       <div className="card-surface rounded-2xl divide-y divide-border">
-        {anchor && (
-          <div className="flex items-center gap-3 px-3 py-2.5">
-            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-              <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm">Caisse comptée</div>
-              <div className="text-[11px] text-muted-foreground">{dateFR(anchor.created_at)}</div>
-            </div>
-            <div className="font-display text-lg shrink-0">{formatEUR(anchor.counted_cents)}</div>
-          </div>
-        )}
+        <div className="flex items-center justify-between px-3 py-2.5 bg-muted/20">
+          <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Solde
+          </span>
+          <span className="font-display text-xl text-primary">{formatEUR(balance)}</span>
+        </div>
 
         {lignes.map((m) => (
           <div key={m.key} className="flex items-center gap-3 px-3 py-2.5">
@@ -147,20 +142,20 @@ function Journal({ anchor, since, balance }: {
           </div>
         ))}
 
-        {anchor && lignes.length === 0 && (
-          <div className="px-3 py-3 text-[13px] text-muted-foreground">
-            Rien n'a bougé depuis.
+        <div className="flex items-center gap-3 px-3 py-2.5">
+          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
           </div>
-        )}
-
-        {lignes.length > 0 && (
-          <div className="flex items-center justify-between px-3 py-2.5 bg-muted/20">
-            <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Solde
-            </span>
-            <span className="font-display text-xl text-primary">{formatEUR(balance)}</span>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-sm">Solde de départ</div>
+            <div className="text-[11px] text-muted-foreground">
+              {opening ? "avant tout ce qui est enregistré ici" : "pas encore défini"}
+            </div>
           </div>
-        )}
+          <div className="font-display text-lg shrink-0">
+            {formatEUR(openingCents(opening))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -336,28 +331,31 @@ function ExpenseList({ expenses, concerts }: { expenses: Expense[]; concerts: Co
 }
 
 /**
- * Comptage réel de la boîte.
+ * Saisie du solde de départ.
  *
- * Il ne corrige pas un total : il en pose un NOUVEAU point de départ, daté.
- * Tout ce qui bougera après s'y ajoutera, et ce qu'on saisira plus tard à
- * propos d'avant ne le touchera plus — cet argent était déjà dans ce qu'on
- * vient de compter.
+ * Ce qu'il y avait dans la boîte AVANT tout ce que l'app enregistre. On montre
+ * en direct le solde qui en découlera : c'est la seule façon de choisir un
+ * chiffre en connaissance de cause, sans avoir à faire la soustraction de tête.
  */
-function CountSheet({ balance, onClose }: { balance: number; onClose: () => void }) {
-  const [value, setValue] = useState("");
+function OpeningSheet({ current, movementsTotal, onClose }: {
+  current: number;
+  /** Somme de tous les mouvements connus, hors solde de départ. */
+  movementsTotal: number;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState(current ? (current / 100).toString() : "");
   const [busy, setBusy] = useState(false);
   useBackHandler(true, onClose);
 
-  const counted = Math.round(parseFloat(value.replace(",", ".") || "0") * 100);
-  const valid = value.trim() !== "" && Number.isFinite(counted) && counted >= 0;
-  const delta = counted - balance;
+  const cents = Math.round(parseFloat(value.replace(",", ".") || "0") * 100);
+  const valid = value.trim() !== "" && Number.isFinite(cents) && cents >= 0;
 
   const submit = async () => {
     if (!valid) return;
     setBusy(true);
     try {
-      await recordCaisseCheck(counted, balance);
-      toast.success("Caisse recalée");
+      await setOpeningBalance(cents);
+      toast.success("Solde de départ enregistré");
       onClose();
     } catch (e) {
       toast.error((e as Error).message);
@@ -374,9 +372,9 @@ function CountSheet({ balance, onClose }: { balance: number; onClose: () => void
         <div className="w-10 h-1 rounded-full bg-muted mx-auto" />
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h2 className="font-display text-xl">Comptage de la caisse</h2>
+            <h2 className="font-display text-xl">Solde de départ</h2>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Compte les billets et les pièces, et saisis le total.
+              Ce qu'il y avait dans la boîte avant tout ce que l'app enregistre.
             </p>
           </div>
           <button onClick={onClose} aria-label="Fermer" className="p-2 -mr-2 -mt-1 text-muted-foreground shrink-0">
@@ -386,7 +384,7 @@ function CountSheet({ balance, onClose }: { balance: number; onClose: () => void
 
         <label className="rounded-xl bg-input border border-border px-3 py-2 block">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            Montant compté (€)
+            Montant (€)
           </div>
           <input
             type="number" step="0.01" min={0} inputMode="decimal"
@@ -400,23 +398,20 @@ function CountSheet({ balance, onClose }: { balance: number; onClose: () => void
 
         <div className="rounded-xl bg-muted/40 border border-border/60 p-3 space-y-1.5">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">L'app comptait</span>
-            <span>{formatEUR(balance)}</span>
+            <span className="text-muted-foreground">Mouvements enregistrés</span>
+            <span>{movementsTotal < 0 ? "−" : "+"}{formatEUR(Math.abs(movementsTotal))}</span>
           </div>
-          {valid && (
-            <div className="flex items-center justify-between text-sm border-t border-border/60 pt-1.5">
-              <span className="text-muted-foreground">Écart</span>
-              <span className={delta < 0 ? "text-destructive" : "text-ok"}>
-                {delta > 0 ? "+" : delta < 0 ? "−" : ""}
-                {formatEUR(Math.abs(delta))}
-              </span>
-            </div>
-          )}
+          <div className="flex items-center justify-between text-sm border-t border-border/60 pt-1.5">
+            <span className="text-muted-foreground">Solde affiché</span>
+            <span className="font-semibold text-primary">
+              {formatEUR((valid ? cents : 0) + movementsTotal)}
+            </span>
+          </div>
         </div>
 
         <p className="text-[11px] text-muted-foreground">
-          Le comptage devient le nouveau point de départ : le solde repart de ce
-          montant, et seuls les mouvements suivants s'y ajouteront.
+          Ajuste le montant jusqu'à ce que le solde affiché corresponde à ce que
+          contient réellement la boîte.
         </p>
 
         <button
@@ -424,7 +419,7 @@ function CountSheet({ balance, onClose }: { balance: number; onClose: () => void
           disabled={!valid || busy}
           className="w-full rounded-xl btn-primary font-display tracking-wider py-3 disabled:opacity-40"
         >
-          {busy ? "…" : "Enregistrer le comptage"}
+          {busy ? "…" : "Enregistrer"}
         </button>
       </div>
     </div>

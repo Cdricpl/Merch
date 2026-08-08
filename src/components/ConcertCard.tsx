@@ -44,7 +44,7 @@ export function ConcertCard({
 
       <div className="flex items-stretch mt-3">
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Caisse</div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Recette</div>
           <div className={`font-display text-[21px] leading-none mt-1 ${closed ? "text-foreground/70" : "text-primary"}`}>
             {formatEUR(totalCents)}
           </div>

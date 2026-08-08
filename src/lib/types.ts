@@ -40,20 +40,6 @@ export type Concert = {
   fee_at?: number;
 };
 
-/** Une sortie d'argent de la caisse : essence, repas, achat de matériel… */
-export type Expense = {
-  id: string;
-  /**
-   * Le concert concerné, ou null : toutes les dépenses ne se rattachent pas à
-   * une soirée (achat de stock, frais de groupe). La saisie se fait depuis
-   * l'onglet Caisse, où le concert n'est pas forcément connu.
-   */
-  concert_id: string | null;
-  label: string;
-  amount_cents: number;
-  created_at: number;
-};
-
 /**
  * Un membre remet dans la boîte ce qu'il a encaissé (QR, ou cachet viré).
  *
@@ -73,36 +59,6 @@ export type Settlement = {
    * geste entier, pas seulement sa dernière ligne.
    */
   created_at: number;
-};
-
-/**
- * Le solde de départ de la boîte.
- *
- * Ce qu'elle contenait AVANT tout ce que l'app enregistre. Le solde courant
- * s'obtient en lui ajoutant tous les mouvements connus, sans exception : c'est
- * un recalcul complet, pas un report figé.
- *
- * Contrepartie assumée : il faut que tout soit saisi. Une dépense oubliée fausse
- * le total tant qu'elle n'est pas inscrite — mais l'inscrire, même des mois
- * plus tard, remet le compte juste.
- *
- * Seul le plus récent s'applique ; les précédents restent comme historique.
- */
-export type OpeningBalance = {
-  id: string;
-  cents: number;
-  created_at: number;
-  /**
-   * Champs des versions antérieures, relus pour ne pas perdre une saisie.
-   *
-   * Ces versions enregistraient un COMPTAGE : le montant trouvé dans la boîte
-   * (counted_cents) et l'écart avec ce que l'app calculait alors
-   * (adjust_cents = compté − mouvements). Cet écart est précisément ce que la
-   * boîte contenait avant les mouvements, donc le solde de départ d'aujourd'hui.
-   * Reprendre counted_cents à sa place compterait les mouvements deux fois.
-   */
-  counted_cents?: number;
-  adjust_cents?: number;
 };
 
 export type Sale = {

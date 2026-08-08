@@ -40,37 +40,19 @@ export async function updateConcert(
 export async function deleteConcert(
   id: string,
   saleIds: string[],
-  expenseIds: string[] = [],
   settlementIds: string[] = [],
 ) {
   const batch = writeBatch(db);
   for (const sid of saleIds) batch.delete(doc(db, "sales", sid));
-  // Sans ça, dépenses et remises survivraient à leur concert et viendraient
-  // fausser le total général avec de l'argent rattaché à rien.
-  for (const eid of expenseIds) batch.delete(doc(db, "expenses", eid));
+  // Sans ça, les remises survivraient à leur concert et laisseraient une dette
+  // soldée par de l'argent rattaché à rien.
   for (const rid of settlementIds) batch.delete(doc(db, "settlements", rid));
   batch.delete(doc(db, "concerts", id));
   await batch.commit();
 }
 
-// -------- Caisse : dépenses et remises --------
+// -------- Remises --------
 
-export async function createExpense(
-  concertId: string | null,
-  label: string,
-  amountCents: number,
-) {
-  await addDoc(collection(db, "expenses"), {
-    concert_id: concertId,
-    label,
-    amount_cents: Math.max(0, Math.round(amountCents)),
-    created_at: Date.now(),
-  });
-}
-
-export async function deleteExpense(id: string) {
-  await deleteDoc(doc(db, "expenses", id));
-}
 
 /**
  * Un membre remet dans la boîte ce qu'il avait encaissé.
@@ -314,15 +296,3 @@ export async function seedInitialStock() {
   await batch.commit();
 }
 
-/**
- * Fixe le solde de départ de la boîte.
- *
- * Chaque saisie est conservée plutôt qu'écrasée : le jour où un total surprend,
- * l'historique dit quand le point de départ a changé.
- */
-export async function setOpeningBalance(cents: number) {
-  await addDoc(collection(db, "caisse_checks"), {
-    cents: Math.round(cents),
-    created_at: Date.now(),
-  });
-}

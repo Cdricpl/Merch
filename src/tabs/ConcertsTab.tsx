@@ -2,11 +2,13 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ChevronLeft, Plus, Trash2, Lock, RotateCcw, Banknote, QrCode, Wallet, Package,
+  Download,
 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import { PAYEES } from "../lib/payment";
 import { deleteConcert, updateConcert } from "../lib/db";
+import { offerCsv, salesCsv, salesFileName } from "../lib/exportCsv";
 import { useBackHandler } from "../lib/useBackHandler";
 import { saleTotalCents, type Concert } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
@@ -89,7 +91,7 @@ function ConcertDetail({
   onBack: () => void;
   onDeleted: () => void;
 }) {
-  const { families, variants, sales, expenses, settlements } = useStore();
+  const { families, variants, sales, settlements } = useStore();
   const [name, setName] = useState(concert.name);
   const [date, setDate] = useState(concert.concert_date);
   const [notes, setNotes] = useState(concert.notes ?? "");
@@ -99,10 +101,6 @@ function ConcertDetail({
   useBackHandler(true, onBack);
 
   const mySales = useMemo(() => sales.filter((s) => s.concert_id === concert.id), [sales, concert.id]);
-  const myExpenses = useMemo(
-    () => expenses.filter((e) => e.concert_id === concert.id),
-    [expenses, concert.id]
-  );
   const mySettlements = useMemo(
     () => settlements.filter((r) => r.concert_id === concert.id),
     [settlements, concert.id]
@@ -180,12 +178,11 @@ function ConcertDetail({
   };
 
   const remove = async () => {
-    if (!confirm("Supprimer ce concert, ses ventes, ses dépenses et ses remises ?")) return;
+    if (!confirm("Supprimer ce concert, ses ventes et ses remises ?")) return;
     try {
       await deleteConcert(
         concert.id,
         mySales.map((s) => s.id),
-        myExpenses.map((e) => e.id),
         mySettlements.map((r) => r.id),
       );
       onDeleted();
@@ -256,6 +253,21 @@ function ConcertDetail({
           className="w-full rounded-xl bg-input border border-border px-3 py-3"
         />
       </div>
+
+      <button
+        onClick={async () => {
+          try {
+            await offerCsv(
+              salesCsv(mySales, families, variants),
+              salesFileName(concert.name, concert.concert_date),
+            );
+          } catch (e) { toast.error((e as Error).message); }
+        }}
+        disabled={mySales.length === 0}
+        className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm active:bg-muted/40 transition disabled:opacity-40"
+      >
+        <Download className="h-4 w-4" /> Exporter les ventes
+      </button>
 
       <FeeEditor concert={concert} />
 

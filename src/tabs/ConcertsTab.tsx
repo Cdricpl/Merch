@@ -258,7 +258,7 @@ function ConcertDetail({
         onClick={async () => {
           try {
             await offerCsv(
-              salesCsv(mySales, families, variants),
+              salesCsv(concert, mySales, families, variants, mySettlements),
               salesFileName(concert.name, concert.concert_date),
             );
           } catch (e) { toast.error((e as Error).message); }
@@ -492,23 +492,6 @@ function FeeEditor({ concert }: { concert: Concert }) {
             </div>
           )}
 
-          {/* Sans cette phrase, un cachet viré donne l'impression que l'app
-              ignore le montant : le solde de la caisse ne bouge pas d'un
-              centime, et rien à l'écran ne dit pourquoi. */}
-          <div className="rounded-xl bg-muted/40 border border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
-            {method === "cash" ? (
-              <>
-                Ce cachet <span className="text-ok font-semibold">entre dans la caisse</span> :
-                le solde augmente de {formatEUR(cents)}.
-              </>
-            ) : (
-              <>
-                Ce cachet est <span className="text-warn font-semibold">chez {payee ?? "un membre"}</span>,
-                pas dans la boîte : le solde de la caisse ne bouge pas. Il n'y
-                entrera qu'au « Remis », dans l'onglet Caisse.
-              </>
-            )}
-          </div>
         </>
       )}
     </div>

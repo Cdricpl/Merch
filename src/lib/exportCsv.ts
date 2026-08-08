@@ -10,7 +10,10 @@
 //     et non comme du texte ;
 //   · un horodatage ISO, trié correctement et compris des deux tableurs.
 
-import { saleTotalCents, type Family, type Sale, type Variant } from "./types";
+import {
+  saleTotalCents,
+  type Concert, type Family, type Sale, type Settlement, type Variant,
+} from "./types";
 
 const SEP = ";";
 
@@ -31,24 +34,42 @@ function stamp(ms: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+// « Ristourne » et non « remise » : dans cette app, une remise est un membre
+// qui rend ce qu'il a encaissé. Garder le même mot pour les deux rendrait le
+// fichier illisible dès qu'on y met les deux.
 const HEADERS = [
-  "Date", "Produit", "Taille", "Quantité",
-  "Prix unitaire", "Remise", "Total", "Paiement", "Membre",
+  "Date", "Type", "Produit", "Taille", "Quantité",
+  "Prix unitaire", "Ristourne", "Montant", "Paiement", "Membre",
 ];
 
 /**
- * Une ligne par vente, du plus ancien au plus récent.
+ * Les ventes d'un concert, et les remboursements de ses QR, dans l'ordre.
  *
  * Le moyen de paiement et le membre sont en clair : c'est par eux qu'on
  * retrouve, dans le tableur, ce qui est arrivé sur le compte de quelqu'un
- * plutôt que dans la boîte.
+ * plutôt que dans la boîte. Les remboursements suivent, sur leurs propres
+ * lignes — sans eux, un QR resterait éternellement « chez quelqu'un » aux yeux
+ * du fichier alors que l'argent est rentré.
+ *
+ * Le cachet de la soirée y figure aussi, sur sa propre ligne.
+ *
+ * La colonne Type permet de sommer les ventes sans y mêler les
+ * remboursements : additionner les deux compterait le même argent deux fois.
  */
-export function salesCsv(sales: Sale[], families: Family[], variants: Variant[]): string {
+export function salesCsv(
+  concert: Concert,
+  sales: Sale[],
+  families: Family[],
+  variants: Variant[],
+  settlements: Settlement[] = [],
+): string {
   const variantById = new Map(variants.map((v) => [v.id, v]));
   const familyById = new Map(families.map((f) => [f.id, f]));
 
-  const lines = [HEADERS.join(SEP)];
-  for (const s of [...sales].sort((a, b) => a.created_at - b.created_at)) {
+  type Row = { at: number; cells: string[] };
+  const rows: Row[] = [];
+
+  for (const s of sales) {
     const v = variantById.get(s.variant_id);
     const f = v ? familyById.get(v.family_id) : undefined;
     // Un article supprimé depuis la vente ne doit pas faire disparaître sa
@@ -60,8 +81,9 @@ export function salesCsv(sales: Sale[], families: Family[], variants: Variant[])
       : s.payment_method === "cash" ? "Liquide"
       : "Non renseigné";
 
-    lines.push([
+    rows.push({ at: s.created_at, cells: [
       stamp(s.created_at),
+      "Vente",
       produit,
       taille,
       String(s.quantity),
@@ -70,8 +92,45 @@ export function salesCsv(sales: Sale[], families: Family[], variants: Variant[])
       amount(saleTotalCents(s)),
       paiement,
       s.payment_method === "qr" ? (s.payment_payee || "?") : "",
-    ].map(cell).join(SEP));
+    ]});
   }
+
+  // Le cachet n'est pas une vente, mais il fait partie de ce que la soirée a
+  // rapporté : le laisser dehors obligerait à le ressaisir à la main.
+  const fee = concert.fee_cents ?? 0;
+  if (fee > 0) {
+    const vire = concert.fee_method === "virement";
+    rows.push({
+      at: concert.fee_at ?? (Date.parse(concert.concert_date) || 0),
+      cells: [
+        stamp(concert.fee_at ?? (Date.parse(concert.concert_date) || 0)),
+        "Cachet",
+        concert.name,
+        "", "", "",
+        "",
+        amount(fee),
+        vire ? "Virement" : "Liquide",
+        vire ? (concert.fee_payee || "?") : "",
+      ],
+    });
+  }
+
+  for (const r of settlements) {
+    rows.push({ at: r.created_at, cells: [
+      stamp(r.created_at),
+      "Remboursement",
+      "", "", "", "",
+      "",
+      amount(r.amount_cents),
+      "Liquide",
+      r.payee,
+    ]});
+  }
+
+  rows.sort((a, b) => a.at - b.at);
+
+  const lines = [HEADERS.join(SEP)];
+  for (const r of rows) lines.push(r.cells.map(cell).join(SEP));
   return "﻿" + lines.join("\r\n") + "\r\n";
 }
 

@@ -6,7 +6,7 @@ import { resolve } from "path";
 
 // Numéro de version affiché dans le header (petit badge en haut à droite).
 // Bump manuellement ici à chaque changement notable.
-const APP_VERSION = "v5.0";
+const APP_VERSION = "v5.1";
 
 export default defineConfig({
   base: "/Merch/",

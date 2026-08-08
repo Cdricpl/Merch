@@ -2,6 +2,7 @@
 // les totaux qui permettent de recouper la soirée d'un coup d'œil.
 
 import { buildXlsx, type Row } from "./xlsx";
+import { PAYEES } from "./payment";
 import {
   saleTotalCents,
   type Concert, type Family, type Sale, type Settlement, type Variant,
@@ -84,9 +85,7 @@ export function salesWorkbook(
     ]});
   }
 
-  let rendu = 0;
   for (const r of settlements) {
-    rendu += r.amount_cents;
     lines.push({ at: r.created_at, cells: [
       stamp(r.created_at), "Remboursement", "", "", null, null, null,
       eur(r.amount_cents), "Liquide", r.payee,
@@ -95,13 +94,27 @@ export function salesWorkbook(
 
   lines.sort((a, b) => a.at - b.at);
 
-  // Ce que les membres détiennent encore POUR CE CONCERT : les QR et le cachet
-  // viré, moins ce qui a déjà été rendu.
-  let encaisseParMembres = feeVire ? fee : 0;
+  // Ce que les membres détiennent encore POUR CE CONCERT, membre par membre :
+  // les QR et le cachet viré, moins ce que chacun a rendu. Le total seul
+  // obligeait à rouvrir l'app pour savoir à qui réclamer.
+  const parMembre = new Map<string, number>();
+  const add = (who: string, cents: number) =>
+    parMembre.set(who, (parMembre.get(who) ?? 0) + cents);
+
+  if (feeVire) add(concert.fee_payee || "?", fee);
   for (const s of sales) {
-    if (s.payment_method === "qr") encaisseParMembres += saleTotalCents(s);
+    if (s.payment_method === "qr") add(s.payment_payee || "?", saleTotalCents(s));
   }
-  const reste = encaisseParMembres - rendu;
+  for (const r of settlements) add(r.payee, -r.amount_cents);
+
+  const rank = (who: string) => {
+    const i = PAYEES.indexOf(who as (typeof PAYEES)[number]);
+    return i === -1 ? PAYEES.length : i;
+  };
+  const restes = [...parMembre.entries()]
+    .filter(([, cents]) => cents !== 0)
+    .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
+  const reste = restes.reduce((n, [, cents]) => n + cents, 0);
 
   const rows: Row[] = [{ cells: HEADERS, bold: true }];
   for (const l of lines) rows.push({ cells: l.cells });
@@ -120,6 +133,15 @@ export function salesWorkbook(
   rows.push(total("Total recettes", ventes + fee));
   rows.push({ cells: [] });
   rows.push(total("Reste à rembourser par les membres", reste));
+  for (const [who, cents] of restes) {
+    const cells: (string | number | null)[] = new Array(HEADERS.length).fill(null);
+    cells[0] = `    ${who}`;
+    cells[MONTANT] = eur(cents);
+    // Le nom est repris dans sa colonne : le tableur peut alors le retrouver
+    // par recherche, sans dépendre de l'indentation.
+    cells[HEADERS.length - 1] = who;
+    rows.push({ cells });
+  }
 
   return buildXlsx({ name: "Ventes", widths: WIDTHS, intCols: INT_COLS, rows });
 }

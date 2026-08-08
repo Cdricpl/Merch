@@ -41,6 +41,9 @@ export type Movement = {
   detail?: string;
   /** Positif : l'argent entre. Négatif : il sort. */
   cents: number;
+  /** Colonnes structurées pour l'export : l'affichage se contente du libellé. */
+  concert?: string;
+  payee?: string;
 };
 
 export type PayeeDebt = {
@@ -77,6 +80,7 @@ export function boxMovements(
       label: nameOf.get(s.concert_id) ?? "Concert supprimé",
       detail: "ventes en liquide",
       cents: saleTotalCents(s),
+      concert: nameOf.get(s.concert_id) ?? "Concert supprimé",
     });
   }
 
@@ -92,6 +96,7 @@ export function boxMovements(
       label: c.name,
       detail: "cachet en liquide",
       cents: fee,
+      concert: c.name,
     });
   }
 
@@ -102,6 +107,8 @@ export function boxMovements(
       kind: "settlement",
       label: `${r.payee} a remis`,
       cents: r.amount_cents,
+      concert: nameOf.get(r.concert_id),
+      payee: r.payee,
     });
   }
 
@@ -113,6 +120,7 @@ export function boxMovements(
       label: e.label,
       detail: e.concert_id ? nameOf.get(e.concert_id) : undefined,
       cents: -e.amount_cents,
+      concert: e.concert_id ? nameOf.get(e.concert_id) : undefined,
     });
   }
 
@@ -244,4 +252,117 @@ export function settlementPlan(
   return [...byConcert.entries()]
     .filter(([id, cents]) => cents > 0 && known.has(id))
     .map(([concertId, amountCents]) => ({ concertId, amountCents }));
+}
+
+// ── Export ────────────────────────────────────────────────────────────────
+
+export type LedgerRow = {
+  /** Horodatage, 0 pour le solde de départ qui ouvre toujours le tableau. */
+  at: number;
+  type: string;
+  label: string;
+  concert?: string;
+  payee?: string;
+  cents: number;
+  /** L'argent passe-t-il par la boîte ? Un QR non remis, par exemple, non. */
+  inBox: boolean;
+  /** Solde de la boîte après cette ligne. Inchangé sur une ligne hors boîte. */
+  balance: number;
+};
+
+const TYPE_LABEL: Record<MovementKind, string> = {
+  sale: "Vente en liquide",
+  fee: "Cachet en liquide",
+  settlement: "Remise d'un membre",
+  expense: "Dépense",
+};
+
+/**
+ * Toutes les transactions, pour relecture sur grand écran.
+ *
+ * Le journal de l'app ne montre que ce qui touche la boîte. Ici on ajoute ce
+ * qui n'y passe pas — un QR encaissé par un membre, un cachet viré — parce que
+ * c'est justement ce qu'on cherche quand on veut savoir qui doit quoi. La
+ * colonne « dans la caisse » les distingue, et le solde n'avance que sur les
+ * lignes qui la concernent.
+ */
+export function ledgerRows(
+  concerts: Concert[],
+  sales: Sale[],
+  expenses: Expense[],
+  settlements: Settlement[],
+  opening: OpeningBalance | null,
+): LedgerRow[] {
+  const nameOf = new Map(concerts.map((c) => [c.id, c.name]));
+  const rows: Array<Omit<LedgerRow, "balance">> = [];
+
+  for (const m of boxMovements(concerts, sales, expenses, settlements)) {
+    rows.push({
+      at: m.at,
+      type: TYPE_LABEL[m.kind],
+      label: m.label,
+      concert: m.concert,
+      payee: m.payee,
+      cents: m.cents,
+      inBox: true,
+    });
+  }
+
+  for (const s of sales) {
+    if (s.payment_method === "qr") {
+      rows.push({
+        at: s.created_at,
+        type: "Vente par QR",
+        label: nameOf.get(s.concert_id) ?? "Concert supprimé",
+        concert: nameOf.get(s.concert_id),
+        payee: s.payment_payee || "?",
+        cents: saleTotalCents(s),
+        inBox: false,
+      });
+    } else if (!s.payment_method) {
+      rows.push({
+        at: s.created_at,
+        type: "Vente sans moyen de paiement",
+        label: nameOf.get(s.concert_id) ?? "Concert supprimé",
+        concert: nameOf.get(s.concert_id),
+        cents: saleTotalCents(s),
+        inBox: false,
+      });
+    }
+  }
+
+  for (const c of concerts) {
+    const fee = c.fee_cents ?? 0;
+    if (fee > 0 && c.fee_method === "virement") {
+      rows.push({
+        at: c.fee_at ?? (Date.parse(c.concert_date) || 0),
+        type: "Cachet viré à un membre",
+        label: c.name,
+        concert: c.name,
+        payee: c.fee_payee || "?",
+        cents: fee,
+        inBox: false,
+      });
+    }
+  }
+
+  rows.sort((a, b) => a.at - b.at);
+
+  // Le solde de départ ouvre le tableau : c'est le point d'appui de toute la
+  // colonne de soldes.
+  let balance = openingCents(opening);
+  const out: LedgerRow[] = [{
+    at: opening?.created_at ?? 0,
+    type: "Solde de départ",
+    label: "Avant tout ce qui suit",
+    cents: balance,
+    inBox: true,
+    balance,
+  }];
+
+  for (const r of rows) {
+    if (r.inBox) balance += r.cents;
+    out.push({ ...r, balance });
+  }
+  return out;
 }

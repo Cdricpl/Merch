@@ -2,15 +2,16 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
-  ArrowDownLeft, Banknote, ClipboardCheck, Plus, QrCode, Trash2, Wallet, X,
+  ArrowDownLeft, Banknote, ClipboardCheck, Download, Plus, QrCode, Trash2, Wallet, X,
 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import {
-  boxBalance, boxMovements, openingCents, payeeDebts, settlementPlan,
+  boxBalance, boxMovements, ledgerRows, openingCents, payeeDebts, settlementPlan,
   summariseMovements, totalOwed, unknownSalesCents,
   type Movement, type PayeeDebt,
 } from "../lib/caisse";
+import { csvFileName, ledgerCsv, offerCsv } from "../lib/exportCsv";
 import {
   createExpense, createSettlements, deleteExpense, deleteSettlements,
   setOpeningBalance,
@@ -63,6 +64,18 @@ export function CaisseTab() {
       >
         <ClipboardCheck className="h-4 w-4" />
         {opening ? "Modifier le solde de départ" : "Définir le solde de départ"}
+      </button>
+
+      <button
+        onClick={async () => {
+          try {
+            const rows = ledgerRows(concerts, sales, expenses, settlements, opening);
+            await offerCsv(ledgerCsv(rows), csvFileName());
+          } catch (e) { toast.error((e as Error).message); }
+        }}
+        className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm active:bg-muted/40 transition"
+      >
+        <Download className="h-4 w-4" /> Exporter pour Excel
       </button>
 
       <Journal opening={opening} movements={movements} balance={balance} />

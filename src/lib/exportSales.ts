@@ -25,11 +25,17 @@ const HEADERS = [
   "Prix unitaire", "Ristourne", "Montant", "Paiement", "Membre",
 ];
 
-// La première est large exprès : c'est elle qui affichait des dièses.
-const WIDTHS = [17, 15, 26, 12, 9, 13, 11, 12, 14, 10];
+// La première est large exprès : c'est elle qui affichait des dièses. Elle sert
+// aussi de colonne de libellé aux totaux du bas, d'où la marge.
+const WIDTHS = [20, 15, 26, 12, 9, 13, 11, 12, 14, 10];
 
-/** Colonne des montants, où viennent s'aligner les totaux du bas. */
-const MONTANT = 7;
+/**
+ * Colonne des montants dans le bloc de totaux : juste à côté du libellé.
+ * Les aligner sous la colonne « Montant » du tableau les éloignait de sept
+ * colonnes, et il fallait suivre la ligne des yeux pour rattacher un chiffre à
+ * son intitulé.
+ */
+const MONTANT_TOTAL = 1;
 
 /** La quantité est un entier : « 2 » et non « 2,00 ». */
 const INT_COLS = [4];
@@ -124,7 +130,7 @@ export function salesWorkbook(
   const total = (label: string, cents: number): Row => {
     const cells: (string | number | null)[] = new Array(HEADERS.length).fill(null);
     cells[0] = label;
-    cells[MONTANT] = eur(cents);
+    cells[MONTANT_TOTAL] = eur(cents);
     return { cells, bold: true };
   };
   rows.push({ cells: [] });
@@ -132,14 +138,11 @@ export function salesWorkbook(
   if (fee > 0) rows.push(total(`Cachet${feeVire ? " (virement)" : ""}`, fee));
   rows.push(total("Total recettes", ventes + fee));
   rows.push({ cells: [] });
-  rows.push(total("Reste à rembourser par les membres", reste));
+  rows.push(total("Reste à rembourser", reste));
   for (const [who, cents] of restes) {
     const cells: (string | number | null)[] = new Array(HEADERS.length).fill(null);
     cells[0] = `    ${who}`;
-    cells[MONTANT] = eur(cents);
-    // Le nom est repris dans sa colonne : le tableur peut alors le retrouver
-    // par recherche, sans dépendre de l'indentation.
-    cells[HEADERS.length - 1] = who;
+    cells[MONTANT_TOTAL] = eur(cents);
     rows.push({ cells });
   }
 

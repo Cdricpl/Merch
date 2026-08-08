@@ -8,7 +8,7 @@ import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import { PAYEES } from "../lib/payment";
 import { deleteConcert, updateConcert } from "../lib/db";
-import { offerCsv, salesCsv, salesFileName } from "../lib/exportCsv";
+import { offerFile, salesFileName, salesWorkbook } from "../lib/exportSales";
 import { useBackHandler } from "../lib/useBackHandler";
 import { saleTotalCents, type Concert } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
@@ -257,8 +257,8 @@ function ConcertDetail({
       <button
         onClick={async () => {
           try {
-            await offerCsv(
-              salesCsv(concert, mySales, families, variants, mySettlements),
+            await offerFile(
+              salesWorkbook(concert, mySales, families, variants, mySettlements),
               salesFileName(concert.name, concert.concert_date),
             );
           } catch (e) { toast.error((e as Error).message); }

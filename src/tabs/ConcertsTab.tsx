@@ -6,12 +6,14 @@ import {
 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
+import { parseName } from "../lib/category";
 import { PAYEES } from "../lib/payment";
 import { deleteConcert, updateConcert } from "../lib/db";
 import { offerFile, salesFileName, salesWorkbook } from "../lib/exportSales";
 import { useBackHandler } from "../lib/useBackHandler";
 import { saleTotalCents, type Concert } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
+import { ProductArt } from "../components/ProductArt";
 import { ConcertCard } from "../components/ConcertCard";
 
 export function ConcertsTab() {
@@ -204,36 +206,57 @@ function ConcertDetail({
 
       {/* Hero recap */}
       <div className="card-surface rounded-2xl p-4">
-        <div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Recette totale</div>
-          <div className="font-display text-[2.5rem] text-primary leading-none mt-1.5">{formatEUR(recette)}</div>
-          <div className="text-xs text-muted-foreground mt-2">
-            {formatEUR(total)} de merch
-            {fee > 0 && <> · {formatEUR(fee)} de cachet</>}
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Recette totale
+        </div>
+        <div className="num font-display text-[2.9rem] text-primary leading-[0.92] mt-1.5">
+          {formatEUR(recette)}
+        </div>
+        {/* Deux lignes à points de conduite : on vérifie d'un coup d'œil que
+            merch + cachet retombe bien sur le total. */}
+        <div className="mt-3 space-y-1.5">
+          <div className="flex items-baseline gap-2.5 text-[13px]">
+            <span className="text-muted-foreground">Merch</span>
+            <span className="flex-1 h-px bg-border" />
+            <span className="num font-semibold">{formatEUR(total)}</span>
           </div>
-          <div className="text-xs text-muted-foreground mt-1">
-            {totalItems} article{totalItems > 1 ? "s" : ""} vendu{totalItems > 1 ? "s" : ""}
-            {totalDiscount > 0 && (
-              <> · <span className="text-emerald-500">{formatEUR(totalDiscount)} de remises</span></>
-            )}
-          </div>
+          {fee > 0 && (
+            <div className="flex items-baseline gap-2.5 text-[13px]">
+              <span className="text-muted-foreground">Cachet</span>
+              <span className="flex-1 h-px bg-border" />
+              <span className="num font-semibold">{formatEUR(fee)}</span>
+            </div>
+          )}
+        </div>
+        <div className="num mt-3 pt-2.5 border-t border-border text-xs text-muted-foreground">
+          {totalItems} article{totalItems > 1 ? "s" : ""} vendu{totalItems > 1 ? "s" : ""}
+          {totalDiscount > 0 && (
+            <> · <span className="text-ok">{formatEUR(totalDiscount)} de remises</span></>
+          )}
         </div>
       </div>
 
-      {/* Edit fields */}
+      {/* Le cachet remonte : c'est ce qu'on vient régler après la soirée. */}
+      <FeeEditor concert={concert} />
+
       <div className="space-y-2">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          La fiche
+        </div>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
+          aria-label="Nom du concert"
           className="w-full rounded-xl bg-input border border-border px-3 py-3 font-display text-lg"
         />
         <input
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="w-full rounded-xl bg-input border border-border px-3 py-3"
+          aria-label="Date du concert"
+          className="num w-full rounded-xl bg-input border border-border px-3 py-3"
         />
-        <label className="flex items-center gap-2 text-sm px-1">
+        <label className="flex items-center gap-2.5 text-sm px-1 py-1">
           <input
             type="checkbox"
             checked={active}
@@ -241,12 +264,13 @@ function ConcertDetail({
             disabled={closed}
             className="h-5 w-5 accent-primary"
           />
-          Concert actif (apparaît par défaut dans Ventes)
+          Concert actif — proposé par défaut dans Ventes
         </label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Notes…"
+          aria-label="Notes"
           rows={2}
           className="w-full rounded-xl bg-input border border-border px-3 py-3"
         />
@@ -267,36 +291,41 @@ function ConcertDetail({
         <Download className="h-4 w-4" /> Exporter les ventes
       </button>
 
-      <FeeEditor concert={concert} />
-
       {/* Sales breakdown */}
       {grouped.length === 0 && orphanCents === 0 ? (
         <div className="text-center text-sm text-muted-foreground py-6">Aucune vente pour ce concert.</div>
       ) : (
         <div className="space-y-3">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Détail des ventes
           </div>
           {grouped.map(({ family, entries, total }) => (
             <div key={family.id} className="card-surface rounded-2xl overflow-hidden">
               <div className="flex items-center gap-3 p-3 border-b border-border/60">
-                <div className="w-10 h-10 rounded-md bg-muted overflow-hidden shrink-0">
-                  {family.image && <img src={family.image} alt="" className="w-full h-full object-cover" />}
+                <div className="w-10 h-10 rounded-md bg-muted overflow-hidden shrink-0 flex items-center justify-center">
+                  {family.image ? (
+                    <img src={family.image} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <ProductArt
+                      category={parseName(family.name).category}
+                      className="h-5 w-5 text-muted-foreground/55"
+                    />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-display text-base text-primary truncate">{family.name}</div>
-                  <div className="text-[11px] text-muted-foreground">{formatEUR(family.price_cents)} pièce</div>
+                  <div className="font-display text-base truncate">{family.name}</div>
+                  <div className="num text-[11px] text-muted-foreground">{formatEUR(family.price_cents)} pièce</div>
                 </div>
-                <div className="font-display text-lg">{formatEUR(total)}</div>
+                <div className="num font-display text-lg">{formatEUR(total)}</div>
               </div>
               <div className="divide-y divide-border/40">
                 {entries.map((e, i) => (
                   <div key={i} className="flex items-center justify-between px-3 py-2">
                     <div className="flex items-center gap-3">
                       <span className="w-10 font-display text-base">{e.label ?? "—"}</span>
-                      <span className="text-xs text-muted-foreground">×{e.qty}</span>
+                      <span className="num text-xs text-muted-foreground">×{e.qty}</span>
                     </div>
-                    <div className="text-sm">{formatEUR(e.cents)}</div>
+                    <div className="num text-sm">{formatEUR(e.cents)}</div>
                   </div>
                 ))}
               </div>
@@ -318,28 +347,21 @@ function ConcertDetail({
                   vendus, puis retirés du stock
                 </div>
               </div>
-              <div className="font-display text-lg">{formatEUR(orphanCents)}</div>
+              <div className="num font-display text-lg">{formatEUR(orphanCents)}</div>
             </div>
           )}
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex gap-2">
-        <button
-          onClick={save}
-          className="flex-1 rounded-xl btn-primary font-display tracking-wider py-3"
-        >
-          Enregistrer
-        </button>
-        <button
-          onClick={remove}
-          aria-label="Supprimer ce concert"
-          className="rounded-xl border border-border p-3 text-destructive"
-        >
-          <Trash2 className="h-5 w-5" />
-        </button>
-      </div>
+      {/* Enregistrer était collé à la corbeille : un pouce qui glisse et le
+          concert partait avec ses ventes. La suppression descend tout en bas,
+          loin de tout, et se dit en toutes lettres. */}
+      <button
+        onClick={save}
+        className="w-full rounded-xl btn-primary font-display tracking-wider py-3.5"
+      >
+        Enregistrer
+      </button>
 
       {closed ? (
         <button
@@ -356,6 +378,13 @@ function ConcertDetail({
           <Lock className="h-4 w-4" /> Clôturer ce concert
         </button>
       )}
+
+      <button
+        onClick={remove}
+        className="w-full inline-flex items-center justify-center gap-2 pt-2 pb-1 text-[13px] text-destructive"
+      >
+        <Trash2 className="h-4 w-4" /> Supprimer ce concert
+      </button>
     </div>
   );
 }

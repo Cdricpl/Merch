@@ -1,10 +1,13 @@
 import { useMemo } from "react";
 import { toast } from "sonner";
-import { ArrowDownLeft, Check, QrCode, Undo2 } from "lucide-react";
+import { Check, Undo2 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { formatEUR } from "../lib/format";
 import { payeeDebts, settlementPlan, totalOwed } from "../lib/caisse";
 import { createSettlements, deleteSettlements } from "../lib/db";
+
+/** « Cédric » → « CÉ ». Les quatre membres se distinguent d'un coup d'œil. */
+const initials = (name: string) => name.slice(0, 2).toUpperCase();
 
 /**
  * Qui doit rembourser.
@@ -88,33 +91,39 @@ export function CaisseTab() {
       ) : (
         <>
           <div className="card-surface rounded-2xl p-4">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Encore chez les membres
             </div>
-            <div className="font-display text-[2.5rem] text-warn leading-none mt-2">
+            <div className="num font-display text-[2.9rem] text-warn leading-[0.92] mt-1.5">
               {formatEUR(total)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1.5">
+              {owing.length} membre{owing.length > 1 ? "s" : ""} · encaissé par QR ou cachet viré
             </div>
           </div>
 
           <div className="card-surface rounded-2xl divide-y divide-border">
             {owing.map((d) => (
               <div key={d.payee} className="flex items-center gap-3 px-3 py-2.5">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-warn/20 text-warn">
-                  <QrCode className="h-4 w-4" />
+                <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-warn/20 text-warn font-display text-base">
+                  {initials(d.payee)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm truncate">{d.payee}</div>
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="font-semibold text-[15px] truncate">{d.payee}</div>
+                  <div className="num text-[11px] text-muted-foreground">
                     encaissé {formatEUR(d.collected)}
                     {d.settled > 0 && <> · remis {formatEUR(d.settled)}</>}
                   </div>
                 </div>
+                {/* Largeur fixe : sans elle, un « 400,00 » et un « 20,00 »
+                    donnaient deux boutons de tailles différentes et le bord
+                    droit de la liste dansait. */}
                 <button
                   onClick={() => settle(d.payee)}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg btn-primary text-[12px] font-semibold px-3 py-2 active:scale-95 transition"
+                  className="shrink-0 w-[132px] h-11 rounded-xl btn-primary flex items-center justify-between gap-1 px-2.5 active:scale-95 transition"
                 >
-                  <ArrowDownLeft className="h-3.5 w-3.5" />
-                  Remis {formatEUR(d.remaining)}
+                  <span className="text-[11px] font-semibold">Remis</span>
+                  <span className="num text-[13.5px] font-bold">{formatEUR(d.remaining)}</span>
                 </button>
               </div>
             ))}
@@ -124,26 +133,27 @@ export function CaisseTab() {
 
       {overpaid.length > 0 && (
         <div className="space-y-2">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Remis en trop
           </div>
           <div className="card-surface rounded-2xl divide-y divide-border">
             {overpaid.map((d) => (
               <div key={d.payee} className="flex items-center gap-3 px-3 py-2.5">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-destructive/20 text-destructive">
+                <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-destructive/20 text-destructive">
                   <Undo2 className="h-4 w-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm truncate">{d.payee}</div>
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="font-semibold text-[15px] truncate">{d.payee}</div>
+                  <div className="num text-[11px] text-muted-foreground">
                     encaissé {formatEUR(d.collected)} · remis {formatEUR(d.settled)}
                   </div>
                 </div>
                 <button
                   onClick={() => undoLast(d.payee)}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-border text-[12px] font-semibold px-3 py-2 active:bg-muted/40 transition"
+                  className="shrink-0 w-[132px] h-11 rounded-xl border border-border bg-muted flex items-center justify-between gap-1 px-2.5 active:bg-muted/40 transition"
                 >
-                  Annuler {formatEUR(-d.remaining)}
+                  <span className="text-[11px] font-semibold">Annuler</span>
+                  <span className="num text-[13.5px] font-bold">{formatEUR(-d.remaining)}</span>
                 </button>
               </div>
             ))}

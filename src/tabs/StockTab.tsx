@@ -15,6 +15,7 @@ import {
 } from "../lib/db";
 import { fileToCompressedDataUrl } from "../lib/image";
 import { StockBadge } from "../components/StockBadge";
+import { ProductArt } from "../components/ProductArt";
 import { VariantBar } from "../components/VariantBar";
 import { useBackHandler } from "../lib/useBackHandler";
 import type { Family, Variant } from "../lib/types";
@@ -55,6 +56,19 @@ export function StockTab() {
 
   const openFamily = openId ? families.find((x) => x.id === openId) : undefined;
 
+  // Ce que la liste seule ne disait pas : combien de pièces en tout, et
+  // combien de tailles sont dans le rouge. C'est le chiffre qu'on vient
+  // chercher avant de préparer les cartons.
+  const resume = useMemo(() => {
+    let pieces = 0;
+    let basses = 0;
+    for (const v of variants) {
+      pieces += Math.max(0, v.stock);
+      if (v.stock <= RED_MAX) basses++;
+    }
+    return { pieces, basses };
+  }, [variants]);
+
   const openFamilyVariants = useMemo(
     () => variantsByFamily.get(openId ?? "") ?? [],
     [variantsByFamily, openId]
@@ -83,6 +97,33 @@ export function StockTab() {
         </button>
       </div>
 
+      {grouped.length > 0 && (
+        <div className="card-surface rounded-2xl px-3.5 py-3 flex items-center gap-3.5">
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Pièces en stock
+            </div>
+            <div className="num font-display text-[2.1rem] leading-none mt-1">{resume.pieces}</div>
+          </div>
+          <div className="w-px self-stretch bg-border" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              À réassortir
+            </div>
+            <div
+              className={`num font-display text-[2.1rem] leading-none mt-1 ${
+                resume.basses > 0 ? "text-destructive" : "text-ok"
+              }`}
+            >
+              {resume.basses}{" "}
+              <span className="font-sans text-[13px] font-medium text-muted-foreground">
+                taille{resume.basses > 1 ? "s" : ""}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2">
         {grouped.map(({ family, items, total, lowCount }) => {
           const { category, display } = parseName(family.name);
@@ -92,15 +133,19 @@ export function StockTab() {
               onClick={() => setOpenId(family.id)}
               className="card-surface w-full flex items-center gap-3 rounded-2xl p-3 text-left active:opacity-80 transition"
             >
-              <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0">
-                {family.image && <img src={family.image} alt="" className="w-full h-full object-cover" />}
+              <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0 flex items-center justify-center">
+                {family.image ? (
+                  <img src={family.image} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <ProductArt category={category} className="h-6 w-6 text-muted-foreground/55" />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 {category && (
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{category}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{category}</div>
                 )}
                 <div className="font-semibold text-sm truncate">{display}</div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="num text-[11px] text-muted-foreground">
                   {formatEUR(family.price_cents)} · {items.length} taille{items.length > 1 ? "s" : ""}
                 </div>
               </div>

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { collection, onSnapshot, orderBy, query, type Query } from "firebase/firestore";
-import { db, kickConnection } from "./firebase";
+import { db, kickConnection, authReady } from "./firebase";
 import type { Family, Variant, Concert, Sale, Settlement } from "./types";
 
 type Store = {
@@ -146,13 +146,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         )
       );
 
-    sub<Family>(query(collection(db, "families"), orderBy("sort_order")), setFamilies);
-    sub<Variant>(query(collection(db, "variants"), orderBy("sort_order")), setVariants);
-    sub<Concert>(query(collection(db, "concerts"), orderBy("concert_date", "desc")), setConcerts);
-    sub<Sale>(query(collection(db, "sales"), orderBy("created_at", "desc")), setSales);
-    sub<Settlement>(query(collection(db, "settlements"), orderBy("created_at", "desc")), setSettlements);
+    // Les écoutes n'ouvrent qu'une fois la session anonyme obtenue : sans
+    // jeton, des règles Firestore fermées refusent la toute première requête,
+    // et l'app démarrerait sur un écran « Reconnexion… » le temps d'un aller-
+    // retour. `authReady` aboutit dans tous les cas, même en échec, donc rien
+    // ne reste bloqué si la connexion anonyme n'est pas activée.
+    let cancelled = false;
+    authReady.then(() => {
+      if (cancelled) return;
+      sub<Family>(query(collection(db, "families"), orderBy("sort_order")), setFamilies);
+      sub<Variant>(query(collection(db, "variants"), orderBy("sort_order")), setVariants);
+      sub<Concert>(query(collection(db, "concerts"), orderBy("concert_date", "desc")), setConcerts);
+      sub<Sale>(query(collection(db, "sales"), orderBy("created_at", "desc")), setSales);
+      sub<Settlement>(query(collection(db, "settlements"), orderBy("created_at", "desc")), setSettlements);
+    });
 
     return () => {
+      cancelled = true;
       restarting = true;
       if (retryId) clearTimeout(retryId);
       for (const u of unsubs) u();

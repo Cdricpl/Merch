@@ -36,7 +36,7 @@ export function ConcertCard({
         </span>
       </div>
 
-      <div className="text-[12px] uppercase tracking-wider text-muted-foreground mt-1.5 ml-[28px]">
+      <div className="num text-[12px] uppercase tracking-wider text-muted-foreground mt-1.5 ml-[28px]">
         {new Date(concert.concert_date).toLocaleDateString("fr-BE", {
           day: "2-digit", month: "long", year: "numeric",
         })}
@@ -44,15 +44,15 @@ export function ConcertCard({
 
       <div className="flex items-stretch mt-3">
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Recette</div>
-          <div className={`font-display text-[21px] leading-none mt-1 ${closed ? "text-foreground/70" : "text-primary"}`}>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Recette</div>
+          <div className={`num font-display text-[21px] leading-none mt-1 ${closed ? "text-foreground/70" : "text-primary"}`}>
             {formatEUR(totalCents)}
           </div>
         </div>
         <div className="w-px bg-border mx-3" />
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Ventes</div>
-          <div className="font-display text-[21px] leading-none mt-1">{totalItems}</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Ventes</div>
+          <div className="num font-display text-[21px] leading-none mt-1">{totalItems}</div>
         </div>
       </div>
 

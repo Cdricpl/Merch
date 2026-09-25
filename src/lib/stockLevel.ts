@@ -30,9 +30,9 @@ export function familyLevel(totalStock: number, lowVariantCount: number): StockL
 
 export function levelBg(l: StockLevel): string {
   switch (l) {
-    case "critical": return "bg-destructive text-destructive-foreground";
-    case "warning":  return "bg-warn text-black";
-    case "ok":       return "bg-ok text-white";
+    case "critical": return "bg-alert text-alert-foreground";
+    case "warning":  return "bg-warn text-warn-foreground";
+    case "ok":       return "bg-ok text-ok-foreground";
   }
 }
 

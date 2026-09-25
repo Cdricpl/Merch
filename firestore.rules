@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Règles de la base Ardenne Heavy Merch.
+//
+// À COLLER dans la console Firebase : Firestore Database → Règles → Publier.
+// Ce fichier n'est pas déployé automatiquement ; il vit ici pour qu'on sache
+// ce qui est censé être en ligne.
+//
+// AVANT DE PUBLIER, activer la connexion anonyme :
+//   Authentication → Sign-in method → Anonymous → Activer.
+// Sans elle, l'app n'obtient aucun jeton et ces règles bloquent tout.
+//
+// Ce que ça change : la base n'est plus ouverte à qui devine l'URL du projet.
+// Ce que ça ne change pas : personne n'a à saisir quoi que ce soit, la session
+// anonyme s'ouvre toute seule au lancement (cf. src/lib/firebase.ts).
+//
+// Ce n'est pas un contrôle d'accès par personne — n'importe qui peut obtenir un
+// jeton anonyme. C'est une porte fermée plutôt qu'une porte ouverte : elle
+// arrête les robots qui balaient les projets Firebase laissés en accès libre.
+// Pour aller plus loin, activer App Check.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Les cinq collections que l'app écoute réellement.
+    match /{coll}/{doc} {
+      allow read, write: if request.auth != null
+        && coll in ['families', 'variants', 'concerts', 'sales', 'settlements'];
+    }
+  }
+}

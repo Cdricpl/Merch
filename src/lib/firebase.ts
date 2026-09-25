@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { getAuth, signInAnonymously } from "firebase/auth";
 import {
   disableNetwork,
   enableNetwork,
@@ -55,6 +56,28 @@ export const db = (() => {
     // Navigateur sans IndexedDB (mode privé sur certains Safari) : on retombe
     // sur le cache mémoire, l'app reste pleinement utilisable en ligne.
     return getFirestore(app);
+  }
+})();
+
+/**
+ * Ouvre une session anonyme.
+ *
+ * Les règles Firestore ne peuvent rien vérifier sans jeton : tant qu'aucun
+ * utilisateur n'est signé, la seule règle possible est « tout le monde peut
+ * tout lire et tout écrire ». Une session anonyme ne demande rien à personne —
+ * aucun mot de passe, aucun écran de plus — mais elle donne à chaque appareil
+ * un jeton, et donc aux règles quelque chose à exiger (cf. firestore.rules).
+ *
+ * L'échec n'est pas fatal et ne doit JAMAIS bloquer l'app : tant que la
+ * connexion anonyme n'est pas activée dans la console Firebase, cet appel
+ * échoue, et l'app doit continuer de fonctionner exactement comme avant. C'est
+ * ce qui permet de déployer ce code AVANT de fermer les règles.
+ */
+export const authReady: Promise<void> = (async () => {
+  try {
+    await signInAnonymously(getAuth(app));
+  } catch {
+    /* connexion anonyme pas encore activée, ou hors ligne : on continue */
   }
 })();
 

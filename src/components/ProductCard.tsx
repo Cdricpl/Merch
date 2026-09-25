@@ -3,6 +3,7 @@ import { Plus, Minus, ChevronRight } from "lucide-react";
 import { formatEUR } from "../lib/format";
 import { parseName } from "../lib/category";
 import { familyLevel, levelBg } from "../lib/stockLevel";
+import { ProductArt } from "./ProductArt";
 import type { Family, Variant } from "../lib/types";
 
 // memo : sans ça, vendre un CD re-rendait les 6 cartes (dont les <img> base64,
@@ -49,7 +50,7 @@ export const ProductCard = memo(function ProductCard({
     <div className="card-surface relative rounded-2xl p-2.5 flex flex-col">
       {/* Pastille de stock, posée dans le coin de la vignette. */}
       <span
-        className={`absolute top-2.5 right-2.5 z-10 min-w-7 h-7 px-1.5 rounded-full text-xs font-bold flex items-center justify-center ${levelBg(
+        className={`num absolute top-2.5 right-2.5 z-10 min-w-7 h-7 px-1.5 rounded-full text-xs font-bold flex items-center justify-center ${levelBg(
           familyLevel(shown, lowCount)
         )}`}
       >
@@ -57,7 +58,7 @@ export const ProductCard = memo(function ProductCard({
       </span>
 
       {inCart > 0 && (
-        <span className="absolute top-2.5 left-2.5 z-10 min-w-6 h-6 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-bold flex items-center justify-center ring-2 ring-card">
+        <span className="num absolute top-2.5 left-2.5 z-10 min-w-6 h-6 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-bold flex items-center justify-center ring-2 ring-card">
           {inCart}
         </span>
       )}
@@ -76,33 +77,33 @@ export const ProductCard = memo(function ProductCard({
             className="max-w-[76%] max-h-full object-contain rounded-lg drop-shadow-[0_8px_14px_rgba(0,0,0,0.75)]"
           />
         ) : (
-          <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
-            {category || "produit"}
-          </span>
+          <ProductArt category={category} className="h-[52px] w-[52px] text-muted-foreground/45" />
         )}
       </button>
 
       <div className="mt-1 min-w-0">
         {category && (
-          <div className="text-[9px] font-medium tracking-[0.14em] uppercase text-muted-foreground">
+          <div className="text-[9px] font-semibold tracking-[0.14em] uppercase text-muted-foreground">
             {category}
           </div>
         )}
         <div className="font-semibold text-[13.5px] leading-tight text-foreground truncate mt-0.5">
           {display}
         </div>
-        <div className="text-primary font-bold text-[15px] mt-1">{formatEUR(family.price_cents)}</div>
+        {/* Le prix passe en blanc : le rouge est rendu à ce qui se presse. */}
+        <div className="num font-bold text-[15px] mt-1">{formatEUR(family.price_cents)}</div>
       </div>
 
-      {/* Compteur : − / vendus / + */}
-      <div className="mt-2 flex items-center justify-between gap-2">
+      {/* Compteur : − / vendus / +. Les pas font 44 px — au stand on tape vite
+          et de travers, et l'ancien 36 × 32 se ratait une fois sur cinq. */}
+      <div className="mt-2 flex items-center justify-between gap-1.5">
         <button
           onClick={() => onRemove(family)}
           disabled={!canRemove}
           aria-label={inCart > 0 ? "Retirer du panier" : "Annuler la dernière vente"}
-          className="btn-step w-9 h-8 shrink-0"
+          className="btn-step w-11 h-11 shrink-0"
         >
-          <Minus className="h-4 w-4" />
+          <Minus className="h-[18px] w-[18px]" />
         </button>
 
         <div className="flex flex-col items-center leading-none min-w-0">
@@ -114,9 +115,11 @@ export const ProductCard = memo(function ProductCard({
           onClick={handlePrimary}
           disabled={disabled}
           aria-label={single ? "Vendre 1" : "Choisir taille"}
-          className="btn-step w-9 h-8 shrink-0 !text-foreground"
+          className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center active:scale-90 transition disabled:opacity-30 ${
+            single ? "btn-primary" : "border border-border bg-muted text-foreground"
+          }`}
         >
-          {single ? <Plus className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          {single ? <Plus className="h-[18px] w-[18px]" /> : <ChevronRight className="h-[18px] w-[18px]" />}
         </button>
       </div>
     </div>

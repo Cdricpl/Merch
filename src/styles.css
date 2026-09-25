@@ -19,12 +19,16 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-alert: var(--alert);
+  --color-alert-foreground: var(--alert-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ok: var(--ok);
+  --color-ok-foreground: var(--ok-foreground);
   --color-warn: var(--warn);
+  --color-warn-foreground: var(--warn-foreground);
   --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: "Barlow", system-ui, sans-serif;
 }
 
 /* Ardenne Heavy — noir profond, rouge réservé aux actions et aux chiffres.
@@ -43,17 +47,27 @@
   --primary-foreground: #ffffff;
 
   --muted: #1c1c1f;
-  --muted-foreground: #8a8a91;
+  /* Relevé depuis #8a8a91 : à 10-11 px, l'ancien gris passait sous le seuil de
+     lisibilité une fois posé sur une carte. */
+  --muted-foreground: #9a9aa2;
 
+  /* Texte et bordures d'alerte, sur fond sombre. */
   --destructive: #e5484d;
   --destructive-foreground: #ffffff;
 
   --border: #262629;
   --input: #1c1c1f;
 
-  /* Jauges de stock */
+  /* Pastilles de stock. Le texte est SOMBRE sur le vert et sur l'orange : en
+     blanc, le contraste tombait à 2,6:1 — un chiffre qu'on devinait plus qu'on
+     ne le lisait. Le rouge d'alerte est plus profond que le rouge d'action,
+     pour qu'une pastille ne se prenne pas pour un bouton. */
   --ok: #3fb950;
+  --ok-foreground: #06210c;
   --warn: #e8912a;
+  --warn-foreground: #241300;
+  --alert: #d01a21;
+  --alert-foreground: #ffffff;
 }
 
 @layer base {
@@ -91,10 +105,19 @@
     font-family: var(--font-display);
     letter-spacing: 0.02em;
     text-transform: uppercase;
+    /* Tous les gros chiffres de l'app passent par ici. */
+    font-variant-numeric: tabular-nums;
   }
 }
 
 @layer components {
+  /* Chiffres à chasse fixe. Sans ça, une colonne de montants danse d'une ligne
+     à l'autre — le « 1 » est plus étroit que les autres chiffres — et deux
+     totaux superposés ne se comparent plus d'un coup d'œil. */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
   /* Carte standard : fond plat, bordure fine, ombre portée très basse.
      La profondeur vient de la bordure et de l'ombre, pas d'un dégradé. */
   .card-surface {
@@ -127,7 +150,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 0.625rem;
+    border-radius: 0.75rem;
     border: 1px solid var(--border);
     background: #101012;
     color: var(--muted-foreground);

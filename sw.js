@@ -1,4 +1,4 @@
-const CACHE = 'ah-merch-v43';
+const CACHE = 'ah-merch-v44';
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
 
 // Les bundles JS/CSS ont un hash dans leur nom : les servir depuis le cache est

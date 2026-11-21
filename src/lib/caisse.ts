@@ -6,7 +6,7 @@
 // argent est une dette du membre envers le groupe jusqu'à ce qu'il le remette.
 
 import { PAYEES } from "./payment";
-import { saleTotalCents, type Concert, type Sale, type Settlement } from "./types";
+import { feeShares, saleTotalCents, type Concert, type Sale, type Settlement } from "./types";
 
 export type PayeeDebt = {
   payee: string;
@@ -41,9 +41,10 @@ export function payeeDebts(
     // sous « ? » plutôt que de le perdre.
     debtFor(s.payment_payee || "?").collected += saleTotalCents(s);
   }
+  // Un cachet viré peut l'avoir été en plusieurs fois — un virement par membre.
+  // Chacun ne détient alors que sa part.
   for (const c of concerts) {
-    const fee = c.fee_cents ?? 0;
-    if (fee > 0 && c.fee_method === "virement") debtFor(c.fee_payee || "?").collected += fee;
+    for (const s of feeShares(c)) debtFor(s.payee).collected += s.cents;
   }
   for (const r of settlements) {
     debtFor(r.payee).settled += r.amount_cents;
@@ -85,8 +86,7 @@ export function settlementPlan(
     add(s.concert_id, saleTotalCents(s));
   }
   for (const c of concerts) {
-    const fee = c.fee_cents ?? 0;
-    if (fee > 0 && c.fee_method === "virement" && (c.fee_payee || "?") === payee) add(c.id, fee);
+    for (const s of feeShares(c)) if (s.payee === payee) add(c.id, s.cents);
   }
   for (const r of settlements) {
     if (r.payee === payee) add(r.concert_id, -r.amount_cents);

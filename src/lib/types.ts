@@ -31,7 +31,22 @@ export type Concert = {
    */
   fee_cents?: number;
   fee_method?: "cash" | "virement";
-  fee_payee?: string | null; // le membre crédité, pour un virement
+  /**
+   * Ancien champ : le membre crédité quand le cachet partait sur un seul
+   * compte. Gardé en lecture pour les concerts déjà encodés, et réécrit tant
+   * qu'il n'y a qu'un bénéficiaire. `fee_payees` fait foi dès qu'il existe.
+   */
+  fee_payee?: string | null;
+  /**
+   * Les membres sur le compte desquels le cachet a été viré.
+   *
+   * Un organisateur paie souvent le cachet en autant de virements qu'il y a de
+   * membres — 40 € à chacun. Le montant se répartit alors à parts égales entre
+   * les membres listés ici. Garder la répartition implicite plutôt que de
+   * stocker un montant par membre rend impossible un total qui ne retombe pas
+   * sur la somme des parts.
+   */
+  fee_payees?: string[];
   /**
    * Quand le montant a été saisi. Sert à dater la ligne « Cachet » de l'export,
    * pour qu'elle se range à sa place parmi les ventes. Absent sur les cachets
@@ -83,4 +98,36 @@ export type Sale = {
 /** Ce que la ligne a réellement rapporté, remise déduite. */
 export function saleTotalCents(s: Sale): number {
   return s.quantity * s.unit_price_cents - (s.discount_cents ?? 0);
+}
+
+/**
+ * Les membres crédités du cachet, en retombant sur l'ancien champ unique.
+ *
+ * Les doublons sont écartés : un même membre listé deux fois recevrait deux
+ * parts, et devrait donc le double de ce qu'il a touché.
+ */
+export function feePayees(c: Concert): string[] {
+  const list = (c.fee_payees ?? []).filter((p) => p);
+  if (list.length > 0) return [...new Set(list)];
+  // Un virement sans nom reste un virement : l'argent n'est pas dans la boîte.
+  // On le range sous « ? » plutôt que de le perdre.
+  return [c.fee_payee || "?"];
+}
+
+/**
+ * Qui détient le cachet de ce concert, et combien.
+ *
+ * Vide pour un cachet en liquide : il est entré dans la boîte, personne ne le
+ * doit. Pour un virement, le montant se répartit à parts égales entre les
+ * membres crédités, les centimes indivisibles allant aux premiers — la somme
+ * des parts retombe donc toujours exactement sur le cachet, à l'euro et au
+ * centime près.
+ */
+export function feeShares(c: Concert): Array<{ payee: string; cents: number }> {
+  const fee = c.fee_cents ?? 0;
+  if (fee <= 0 || c.fee_method !== "virement") return [];
+  const payees = feePayees(c);
+  const base = Math.floor(fee / payees.length);
+  const extra = fee - base * payees.length;
+  return payees.map((payee, i) => ({ payee, cents: base + (i < extra ? 1 : 0) }));
 }

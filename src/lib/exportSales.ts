@@ -4,7 +4,7 @@
 import { buildXlsx, type Row } from "./xlsx";
 import { PAYEES } from "./payment";
 import {
-  saleTotalCents,
+  feeShares, saleTotalCents,
   type Concert, type Family, type Sale, type Settlement, type Variant,
 } from "./types";
 
@@ -83,12 +83,25 @@ export function salesWorkbook(
 
   const fee = concert.fee_cents ?? 0;
   const feeVire = concert.fee_method === "virement";
+  // Un cachet viré donne une ligne PAR virement : la colonne Membre ne peut
+  // porter qu'un nom, et c'est elle qui permet de recouper qui détient quoi.
+  // Leur somme retombe sur le total « Cachet » du bas.
+  const shares = feeShares(concert);
   if (fee > 0) {
     const at = concert.fee_at ?? (Date.parse(concert.concert_date) || 0);
-    lines.push({ at, cells: [
-      stamp(at), "Cachet", concert.name, "", null, null, null,
-      eur(fee), feeVire ? "Virement" : "Liquide", feeVire ? (concert.fee_payee || "?") : "",
-    ]});
+    if (shares.length > 0) {
+      for (const s of shares) {
+        lines.push({ at, cells: [
+          stamp(at), "Cachet", concert.name, "", null, null, null,
+          eur(s.cents), "Virement", s.payee,
+        ]});
+      }
+    } else {
+      lines.push({ at, cells: [
+        stamp(at), "Cachet", concert.name, "", null, null, null,
+        eur(fee), "Liquide", "",
+      ]});
+    }
   }
 
   for (const r of settlements) {
@@ -107,7 +120,7 @@ export function salesWorkbook(
   const add = (who: string, cents: number) =>
     parMembre.set(who, (parMembre.get(who) ?? 0) + cents);
 
-  if (feeVire) add(concert.fee_payee || "?", fee);
+  for (const s of shares) add(s.payee, s.cents);
   for (const s of sales) {
     if (s.payment_method === "qr") add(s.payment_payee || "?", saleTotalCents(s));
   }
@@ -135,7 +148,13 @@ export function salesWorkbook(
   };
   rows.push({ cells: [] });
   rows.push(total("Total des ventes", ventes));
-  if (fee > 0) rows.push(total(`Cachet${feeVire ? " (virement)" : ""}`, fee));
+  if (fee > 0) {
+    rows.push(total(
+      shares.length > 1 ? `Cachet (${shares.length} virements)`
+        : feeVire ? "Cachet (virement)" : "Cachet",
+      fee,
+    ));
+  }
   rows.push(total("Total recettes", ventes + fee));
   rows.push({ cells: [] });
   rows.push(total("Reste à rembourser", reste));

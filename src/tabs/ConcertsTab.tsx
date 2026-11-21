@@ -11,7 +11,7 @@ import { PAYEES } from "../lib/payment";
 import { deleteConcert, updateConcert } from "../lib/db";
 import { offerFile, salesFileName, salesWorkbook } from "../lib/exportSales";
 import { useBackHandler } from "../lib/useBackHandler";
-import { saleTotalCents, type Concert } from "../lib/types";
+import { feeShares, saleTotalCents, type Concert } from "../lib/types";
 import { NewConcertModal } from "../components/NewConcertModal";
 import { ProductArt } from "../components/ProductArt";
 import { ConcertCard } from "../components/ConcertCard";
@@ -393,18 +393,31 @@ function ConcertDetail({
  * Saisie du cachet.
  *
  * Le mode de paiement n'est pas un détail cosmétique : un cachet en liquide
- * entre dans la boîte, un cachet viré reste chez le membre crédité jusqu'à ce
- * qu'il le rende. Se tromper ici fausse l'état de la caisse du montant du
+ * entre dans la boîte, un cachet viré reste chez les membres crédités jusqu'à
+ * ce qu'ils le rendent. Se tromper ici fausse l'état de la caisse du montant du
  * cachet, c'est-à-dire beaucoup.
+ *
+ * Le montant saisi est TOUJOURS le cachet entier, même quand l'organisateur l'a
+ * payé en autant de virements que de membres : cocher plusieurs membres le
+ * répartit entre eux à parts égales, et la ligne sous les noms rappelle la part
+ * de chacun pour qu'on vérifie d'un coup d'œil qu'on a bien tapé le total.
  */
 function FeeEditor({ concert }: { concert: Concert }) {
   const cents = concert.fee_cents ?? 0;
   const method = concert.fee_method ?? "cash";
-  const payee = concert.fee_payee ?? null;
   const [draft, setDraft] = useState((cents / 100 || "").toString());
+
+  // Les membres cochés, dans l'ordre du groupe. `fee_payees` fait foi ;
+  // l'ancien champ unique sert de repli pour un concert encodé avant les
+  // virements multiples.
+  const selected = useMemo(() => {
+    const list = concert.fee_payees ?? (concert.fee_payee ? [concert.fee_payee] : []);
+    return PAYEES.filter((p) => list.includes(p));
+  }, [concert.fee_payees, concert.fee_payee]);
 
   const save = async (patch: {
     fee_cents?: number; fee_method?: "cash" | "virement"; fee_payee?: string | null;
+    fee_payees?: string[];
   }) => {
     try { await updateConcert(concert.id, patch); }
     catch (e) { toast.error((e as Error).message); }
@@ -412,6 +425,26 @@ function FeeEditor({ concert }: { concert: Concert }) {
 
   const parseDraft = (raw: string) =>
     Math.max(0, Math.round(parseFloat(raw.replace(",", ".") || "0") * 100));
+
+  const toggle = (p: string) => {
+    const next = selected.includes(p as (typeof PAYEES)[number])
+      ? selected.filter((x) => x !== p)
+      : PAYEES.filter((x) => x === p || selected.includes(x));
+    // L'ancien champ reste écrit tant qu'il n'y a qu'un bénéficiaire : un
+    // téléphone resté sur une version précédente lit alors encore le bon nom.
+    save({ fee_payees: next, fee_payee: next.length === 1 ? next[0] : null });
+  };
+
+  // La répartition se calcule sur le total tel qu'il est À L'ÉCRAN, et non tel
+  // qu'il est enregistré : elle suit la frappe sans attendre la sauvegarde.
+  // Aucun membre coché : rien à répartir. Sans ce garde-fou, le repli de
+  // `feeShares` sur l'ancien champ unique ferait réapparaître un nom décoché.
+  const shares = selected.length === 0 ? [] : feeShares({
+    ...concert,
+    fee_cents: parseDraft(draft), fee_method: "virement",
+    fee_payee: null, fee_payees: selected,
+  });
+  const equal = shares.length > 0 && shares.every((s) => s.cents === shares[0].cents);
 
   // Ce que l'écran a de plus récent, lisible depuis un nettoyage d'effet.
   const latest = useRef({ draft, cents, method: concert.fee_method });
@@ -476,7 +509,7 @@ function FeeEditor({ concert }: { concert: Concert }) {
         <>
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => save({ fee_method: "cash", fee_payee: null })}
+              onClick={() => save({ fee_method: "cash", fee_payee: null, fee_payees: [] })}
               className={`inline-flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition ${
                 method === "cash" ? "bg-ok text-white" : "bg-muted/60 border border-border text-muted-foreground"
               }`}
@@ -498,24 +531,47 @@ function FeeEditor({ concert }: { concert: Concert }) {
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
                 Viré sur le compte de
               </div>
+              {/* Plusieurs membres possibles : un organisateur paie souvent
+                  autant de virements qu'il y a de musiciens. */}
               <div className="grid grid-cols-4 gap-2">
                 {PAYEES.map((p) => (
                   <button
                     key={p}
-                    onClick={() => save({ fee_payee: p })}
+                    onClick={() => toggle(p)}
+                    aria-pressed={selected.includes(p)}
                     className={`rounded-lg py-2 text-[13px] font-semibold transition ${
-                      payee === p ? "btn-primary" : "bg-muted/60 border border-border text-muted-foreground"
+                      selected.includes(p)
+                        ? "btn-primary"
+                        : "bg-muted/60 border border-border text-muted-foreground"
                     }`}
                   >
                     {p}
                   </button>
                 ))}
               </div>
-              {!payee && (
+
+              {selected.length === 0 ? (
                 <p className="text-[11px] text-warn mt-1.5">
-                  Choisis un membre, sinon on ne saura pas qui doit le remettre.
+                  Choisis au moins un membre, sinon on ne saura pas qui doit le remettre.
                 </p>
-              )}
+              ) : shares.length > 1 ? (
+                equal ? (
+                  <p className="num text-[11px] text-muted-foreground mt-1.5">
+                    {shares.length} virements de {formatEUR(shares[0].cents)} — chacun doit
+                    remettre sa part.
+                  </p>
+                ) : (
+                  <div className="num text-[11px] text-muted-foreground mt-1.5 space-y-0.5">
+                    {shares.map((s) => (
+                      <div key={s.payee} className="flex items-baseline gap-2">
+                        <span>{s.payee}</span>
+                        <span className="flex-1 h-px bg-border" />
+                        <span>{formatEUR(s.cents)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : null}
             </div>
           )}
 
